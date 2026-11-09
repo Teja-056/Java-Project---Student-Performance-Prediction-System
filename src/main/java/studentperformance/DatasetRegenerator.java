@@ -220,7 +220,7 @@ public class DatasetRegenerator {
                 }
 
                 // Batch insert students
-                String insertStudentSql = "INSERT INTO students (roll_number, name, sem1_sgpa, cgpa, last_sgpa, attendance_percent) VALUES (?, ?, ?, ?, ?, ?)";
+                String insertStudentSql = "INSERT INTO students (dataset_id, roll_number, name, sem1_sgpa, cgpa, last_sgpa, attendance_percent) VALUES (1, ?, ?, ?, ?, ?, ?)";
                 try (PreparedStatement ps = conn.prepareStatement(insertStudentSql)) {
                     for (GeneratedStudent s : students) {
                         ps.setString(1, s.rollNumber);
@@ -235,8 +235,8 @@ public class DatasetRegenerator {
                 }
 
                 // Batch insert internal assessments
-                String insertAssessSql = "INSERT INTO internal_assessments (roll_number, internal_number, subject_name, exam_marks, "
-                        + "assignment1, assignment2, assignment3, quiz1, quiz2, quiz3, imported_legacy) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, FALSE)";
+                String insertAssessSql = "INSERT INTO internal_assessments (dataset_id, roll_number, internal_number, subject_name, exam_marks, "
+                        + "assignment1, assignment2, assignment3, quiz1, quiz2, quiz3, imported_legacy) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, FALSE)";
                 try (PreparedStatement ps = conn.prepareStatement(insertAssessSql)) {
                     for (GeneratedStudent s : students) {
                         for (int internal = 1; internal <= 2; internal++) {

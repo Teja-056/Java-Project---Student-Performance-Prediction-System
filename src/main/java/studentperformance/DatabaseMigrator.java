@@ -17,6 +17,7 @@ public class DatabaseMigrator {
         applyV7SyllabusRedesign(connection);
         applyV8SyllabusAccuracyAndReprocessing(connection);
         applyV9SyllabusRelationalRepair(connection);
+        applyV10DatasetManagement(connection);
         return report;
     }
 
@@ -162,6 +163,76 @@ public class DatabaseMigrator {
             p.setString(1, "V9_SYLLABUS_RELATIONAL_REPAIR");
             p.setString(2, "Dropped hazardous CASCADE foreign key on syllabus_subjects(document_id) to prevent canonical subject deletion.");
             p.executeUpdate();
+        }
+    }
+
+    private void applyV10DatasetManagement(Connection connection) throws SQLException {
+        try (Statement s = connection.createStatement()) {
+            s.executeUpdate("CREATE TABLE IF NOT EXISTS datasets ("
+                    + "dataset_id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY, "
+                    + "dataset_code VARCHAR(64) NOT NULL UNIQUE, "
+                    + "name VARCHAR(255) NOT NULL, "
+                    + "original_filename VARCHAR(255) NOT NULL, "
+                    + "storage_path VARCHAR(500) NULL, "
+                    + "semester VARCHAR(20) NOT NULL DEFAULT 'Semester III', "
+                    + "academic_year VARCHAR(50) NULL, "
+                    + "total_rows INT NOT NULL DEFAULT 0, "
+                    + "valid_count INT NOT NULL DEFAULT 0, "
+                    + "invalid_count INT NOT NULL DEFAULT 0, "
+                    + "is_active BOOLEAN NOT NULL DEFAULT FALSE, "
+                    + "status VARCHAR(30) NOT NULL DEFAULT 'READY', "
+                    + "validation_report LONGTEXT NULL, "
+                    + "error_message TEXT NULL, "
+                    + "created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, "
+                    + "updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, "
+                    + "INDEX idx_datasets_active (is_active), "
+                    + "INDEX idx_datasets_code (dataset_code)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+            s.executeUpdate("INSERT INTO datasets (dataset_id, dataset_code, name, original_filename, semester, academic_year, total_rows, valid_count, invalid_count, is_active, status) "
+                    + "VALUES (1, 'DS-2026-BASELINE', 'Baseline Cohort (Semester III)', 'student_records_100.xlsx', 'Semester III', '2025-2026', 101, 101, 0, TRUE, 'READY') "
+                    + "ON DUPLICATE KEY UPDATE is_active = TRUE");
+        }
+
+        if (!columnExists(connection, "students", "dataset_id")) {
+            try (Statement s = connection.createStatement()) {
+                s.executeUpdate("ALTER TABLE students ADD COLUMN dataset_id BIGINT NOT NULL DEFAULT 1 FIRST");
+            }
+        }
+        if (!columnExists(connection, "internal_assessments", "dataset_id")) {
+            try (Statement s = connection.createStatement()) {
+                s.executeUpdate("ALTER TABLE internal_assessments ADD COLUMN dataset_id BIGINT NOT NULL DEFAULT 1 FIRST");
+            }
+        }
+
+        ensureDatasetCompositeKeys(connection);
+
+        try (PreparedStatement p = connection.prepareStatement(
+                "INSERT IGNORE INTO schema_migrations(version, detail) VALUES (?, ?)")) {
+            p.setString(1, "V10_DATASET_ISOLATION");
+            p.setString(2, "Added datasets table, dataset_id to students and internal_assessments, and composite primary/foreign keys.");
+            p.executeUpdate();
+        }
+    }
+
+    private void ensureDatasetCompositeKeys(Connection connection) {
+        try (Statement s = connection.createStatement()) {
+            try { s.executeUpdate("ALTER TABLE internal_assessments DROP FOREIGN KEY internal_assessments_ibfk_1"); } catch (SQLException ignored) {}
+
+            try (ResultSet rs = connection.getMetaData().getPrimaryKeys(connection.getCatalog(), null, "students")) {
+                int pkCols = 0;
+                while (rs.next()) pkCols++;
+                if (pkCols == 1) {
+                    try { s.executeUpdate("ALTER TABLE internal_assessments DROP PRIMARY KEY"); } catch (SQLException ignored) {}
+                    try { s.executeUpdate("ALTER TABLE students DROP PRIMARY KEY"); } catch (SQLException ignored) {}
+                    s.executeUpdate("ALTER TABLE students ADD PRIMARY KEY (dataset_id, roll_number)");
+                    s.executeUpdate("ALTER TABLE internal_assessments ADD PRIMARY KEY (dataset_id, roll_number, internal_number, subject_name)");
+                    try { s.executeUpdate("ALTER TABLE students ADD INDEX idx_students_roll (roll_number)"); } catch (SQLException ignored) {}
+                    try { s.executeUpdate("ALTER TABLE students ADD CONSTRAINT fk_students_dataset FOREIGN KEY (dataset_id) REFERENCES datasets(dataset_id) ON DELETE CASCADE"); } catch (SQLException ignored) {}
+                    try { s.executeUpdate("ALTER TABLE internal_assessments ADD CONSTRAINT fk_assessments_student FOREIGN KEY (dataset_id, roll_number) REFERENCES students(dataset_id, roll_number) ON DELETE CASCADE"); } catch (SQLException ignored) {}
+                }
+            }
+        } catch (SQLException e) {
+            System.err.println("Notice: ensureDatasetCompositeKeys: " + e.getMessage());
         }
     }
 

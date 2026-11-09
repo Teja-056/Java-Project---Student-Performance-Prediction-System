@@ -39,30 +39,49 @@ public class StudentRepository {
 
     public DatabaseMigrator.MigrationReport getMigrationReport() { return migrationReport; }
 
+    public Long getActiveDatasetId() {
+        try (Connection conn = DriverManager.getConnection(url, user, password);
+             PreparedStatement ps = conn.prepareStatement("SELECT dataset_id FROM datasets WHERE is_active = TRUE LIMIT 1");
+             ResultSet rs = ps.executeQuery()) {
+            if (rs.next()) return rs.getLong(1);
+        } catch (SQLException ignored) {}
+        return 1L;
+    }
+
     public void save(Student student) throws SQLException {
-        saveBatch(List.of(student));
+        saveBatch(getActiveDatasetId(), List.of(student));
+    }
+
+    public void save(Long datasetId, Student student) throws SQLException {
+        saveBatch(datasetId, List.of(student));
     }
 
     public int saveBatch(List<Student> batch) throws SQLException {
+        return saveBatch(getActiveDatasetId(), batch);
+    }
+
+    public int saveBatch(Long datasetId, List<Student> batch) throws SQLException {
         if (batch == null || batch.isEmpty()) return 0;
-        String studentSql = "INSERT INTO students (roll_number,name,sem1_sgpa,cgpa,last_sgpa,attendance_percent) VALUES (?,?,?,?,?,?)";
-        String deleteSql = "DELETE FROM internal_assessments WHERE roll_number=?";
-        String assessmentSql = "INSERT INTO internal_assessments (roll_number,internal_number,subject_name,exam_marks,"
-                + "assignment1,assignment2,assignment3,quiz1,quiz2,quiz3,imported_legacy) VALUES (?,?,?,?,?,?,?,?,?,?,FALSE)";
+        long targetDatasetId = (datasetId != null) ? datasetId : getActiveDatasetId();
+        String studentSql = "INSERT INTO students (dataset_id,roll_number,name,sem1_sgpa,cgpa,last_sgpa,attendance_percent) VALUES (?,?,?,?,?,?,?)";
+        String deleteSql = "DELETE FROM internal_assessments WHERE dataset_id=? AND roll_number=?";
+        String assessmentSql = "INSERT INTO internal_assessments (dataset_id,roll_number,internal_number,subject_name,exam_marks,"
+                + "assignment1,assignment2,assignment3,quiz1,quiz2,quiz3,imported_legacy) VALUES (?,?,?,?,?,?,?,?,?,?,?,FALSE)";
 
         try (Connection connection = DriverManager.getConnection(url, user, password)) {
             connection.setAutoCommit(false);
             try {
                 try (PreparedStatement studentStmt = connection.prepareStatement(studentSql)) {
                     for (Student student : batch) {
-                        studentStmt.setString(1, student.getRollNumber());
-                        studentStmt.setString(2, student.getName());
-                        if (student.getSem1Sgpa() == null) studentStmt.setNull(3, Types.DECIMAL);
-                        else studentStmt.setDouble(3, student.getSem1Sgpa());
-                        studentStmt.setDouble(4, student.getCgpa());
-                        studentStmt.setDouble(5, student.getLastSemesterSgpa());
-                        if (student.getAttendancePercent() == null) studentStmt.setNull(6, Types.DECIMAL);
-                        else studentStmt.setDouble(6, student.getAttendancePercent());
+                        studentStmt.setLong(1, targetDatasetId);
+                        studentStmt.setString(2, student.getRollNumber());
+                        studentStmt.setString(3, student.getName());
+                        if (student.getSem1Sgpa() == null) studentStmt.setNull(4, Types.DECIMAL);
+                        else studentStmt.setDouble(4, student.getSem1Sgpa());
+                        studentStmt.setDouble(5, student.getCgpa());
+                        studentStmt.setDouble(6, student.getLastSemesterSgpa());
+                        if (student.getAttendancePercent() == null) studentStmt.setNull(7, Types.DECIMAL);
+                        else studentStmt.setDouble(7, student.getAttendancePercent());
                         studentStmt.addBatch();
                     }
                     studentStmt.executeBatch();
@@ -70,7 +89,8 @@ public class StudentRepository {
 
                 try (PreparedStatement deleteStmt = connection.prepareStatement(deleteSql)) {
                     for (Student student : batch) {
-                        deleteStmt.setString(1, student.getRollNumber());
+                        deleteStmt.setLong(1, targetDatasetId);
+                        deleteStmt.setString(2, student.getRollNumber());
                         deleteStmt.addBatch();
                     }
                     deleteStmt.executeBatch();
@@ -84,19 +104,20 @@ public class StudentRepository {
                                 if (assessment == null || assessment.getExamMarks() == null) {
                                     continue;
                                 }
-                                assessStmt.setString(1, student.getRollNumber());
-                                assessStmt.setInt(2, exam);
-                                assessStmt.setString(3, subject.name());
-                                assessStmt.setInt(4, assessment.getExamMarks());
+                                assessStmt.setLong(1, targetDatasetId);
+                                assessStmt.setString(2, student.getRollNumber());
+                                assessStmt.setInt(3, exam);
+                                assessStmt.setString(4, subject.name());
+                                assessStmt.setInt(5, assessment.getExamMarks());
                                 for (int i = 0; i < 3; i++) {
                                     Integer a = (assessment == null) ? null : assessment.getAssignmentMarks().get(i);
-                                    if (a == null) assessStmt.setNull(5 + i, Types.INTEGER);
-                                    else assessStmt.setInt(5 + i, a);
+                                    if (a == null) assessStmt.setNull(6 + i, Types.INTEGER);
+                                    else assessStmt.setInt(6 + i, a);
                                 }
                                 for (int i = 0; i < 3; i++) {
                                     Integer q = (assessment == null) ? null : assessment.getQuizMarks().get(i);
-                                    if (q == null) assessStmt.setNull(8 + i, Types.INTEGER);
-                                    else assessStmt.setInt(8 + i, q);
+                                    if (q == null) assessStmt.setNull(9 + i, Types.INTEGER);
+                                    else assessStmt.setInt(9 + i, q);
                                 }
                                 assessStmt.addBatch();
                             }
@@ -115,36 +136,53 @@ public class StudentRepository {
     }
 
     public Set<String> findAllRollNumbers() throws SQLException {
+        return findAllRollNumbers(getActiveDatasetId());
+    }
+
+    public Set<String> findAllRollNumbers(Long datasetId) throws SQLException {
         Set<String> rolls = new HashSet<>();
+        long targetDatasetId = (datasetId != null) ? datasetId : getActiveDatasetId();
         try (Connection connection = DriverManager.getConnection(url, user, password);
-             PreparedStatement statement = connection.prepareStatement("SELECT roll_number FROM students");
-             ResultSet rs = statement.executeQuery()) {
-            while (rs.next()) {
-                rolls.add(rs.getString("roll_number"));
+             PreparedStatement statement = connection.prepareStatement("SELECT roll_number FROM students WHERE dataset_id = ?")) {
+            statement.setLong(1, targetDatasetId);
+            try (ResultSet rs = statement.executeQuery()) {
+                while (rs.next()) {
+                    rolls.add(rs.getString("roll_number"));
+                }
             }
         }
         return rolls;
     }
 
     public List<Student> findAll() throws SQLException {
-        return findStudents(null);
+        return findStudents(getActiveDatasetId(), null);
+    }
+
+    public List<Student> findAll(Long datasetId) throws SQLException {
+        return findStudents(datasetId != null ? datasetId : getActiveDatasetId(), null);
     }
 
     public Student findByRollNumber(String rollNumber) throws SQLException {
-        List<Student> result = findStudents(rollNumber);
+        return findByRollNumber(getActiveDatasetId(), rollNumber);
+    }
+
+    public Student findByRollNumber(Long datasetId, String rollNumber) throws SQLException {
+        List<Student> result = findStudents(datasetId != null ? datasetId : getActiveDatasetId(), rollNumber);
         return result.isEmpty() ? null : result.get(0);
     }
 
-    private List<Student> findStudents(String requestedRoll) throws SQLException {
-        String sql = "SELECT s.roll_number,s.name,s.sem1_sgpa,s.cgpa,s.last_sgpa,s.attendance_percent,m.internal_number,m.subject_name,"
+    private List<Student> findStudents(Long datasetId, String requestedRoll) throws SQLException {
+        long targetDatasetId = (datasetId != null) ? datasetId : getActiveDatasetId();
+        String sql = "SELECT s.dataset_id,s.roll_number,s.name,s.sem1_sgpa,s.cgpa,s.last_sgpa,s.attendance_percent,m.internal_number,m.subject_name,"
                 + "m.exam_marks,m.assignment1,m.assignment2,m.assignment3,m.quiz1,m.quiz2,m.quiz3,m.imported_legacy "
-                + "FROM students s LEFT JOIN internal_assessments m ON s.roll_number=m.roll_number "
-                + (requestedRoll == null ? "" : "WHERE s.roll_number=? ") + "ORDER BY s.roll_number,m.internal_number";
+                + "FROM students s LEFT JOIN internal_assessments m ON s.dataset_id=m.dataset_id AND s.roll_number=m.roll_number "
+                + "WHERE s.dataset_id=? "
+                + (requestedRoll == null ? "" : "AND s.roll_number=? ") + "ORDER BY s.roll_number,m.internal_number";
         List<Student> students = new ArrayList<>();
         try (Connection connection = DriverManager.getConnection(url, user, password);
-             PreparedStatement statement = connection.prepareStatement(sql);
-             ) {
-            if (requestedRoll != null) statement.setString(1, requestedRoll);
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setLong(1, targetDatasetId);
+            if (requestedRoll != null) statement.setString(2, requestedRoll);
             try (ResultSet rows = statement.executeQuery()) {
             String roll = null, name = null;
             Double sem1 = null;
@@ -155,7 +193,7 @@ public class StudentRepository {
             while (rows.next()) {
                 String nextRoll = rows.getString("roll_number");
                 if (roll != null && !roll.equals(nextRoll)) {
-                    students.add(Student.fromDatabase(name, roll, sem1, cgpa, sgpa, att, first, second, List.of()));
+                    students.add(Student.fromDatabase(targetDatasetId, name, roll, sem1, cgpa, sgpa, att, first, second, List.of()));
                     first = new EnumMap<>(Subject.class); second = new EnumMap<>(Subject.class);
                 }
                 if (!nextRoll.equals(roll)) {
@@ -179,20 +217,22 @@ public class StudentRepository {
                     if (subject != null) (rows.getInt("internal_number") == 1 ? first : second).put(subject, assessment);
                 }
             }
-            if (roll != null) students.add(Student.fromDatabase(name, roll, sem1, cgpa, sgpa, att, first, second, List.of()));
+            if (roll != null) students.add(Student.fromDatabase(targetDatasetId, name, roll, sem1, cgpa, sgpa, att, first, second, List.of()));
             }
-            Map<String, List<LegacyMark>> legacyByRoll = new HashMap<>();
-            try (PreparedStatement legacy = connection.prepareStatement("SELECT roll_number,internal_number,subject_name,raw_marks FROM legacy_internal_marks_archive"
-                    + (requestedRoll == null ? "" : " WHERE roll_number=?") + " ORDER BY roll_number,internal_number,subject_name")) {
-                if (requestedRoll != null) legacy.setString(1, requestedRoll);
-                try (ResultSet rows = legacy.executeQuery()) {
-                    while (rows.next()) legacyByRoll.computeIfAbsent(rows.getString("roll_number"), key -> new ArrayList<>())
-                            .add(new LegacyMark(rows.getInt("internal_number"), rows.getString("subject_name"), rows.getInt("raw_marks")));
+            if (targetDatasetId == 1L) {
+                Map<String, List<LegacyMark>> legacyByRoll = new HashMap<>();
+                try (PreparedStatement legacy = connection.prepareStatement("SELECT roll_number,internal_number,subject_name,raw_marks FROM legacy_internal_marks_archive"
+                        + (requestedRoll == null ? "" : " WHERE roll_number=?") + " ORDER BY roll_number,internal_number,subject_name")) {
+                    if (requestedRoll != null) legacy.setString(1, requestedRoll);
+                    try (ResultSet rows = legacy.executeQuery()) {
+                        while (rows.next()) legacyByRoll.computeIfAbsent(rows.getString("roll_number"), key -> new ArrayList<>())
+                                .add(new LegacyMark(rows.getInt("internal_number"), rows.getString("subject_name"), rows.getInt("raw_marks")));
+                    }
                 }
-            }
-            for (int i = 0; i < students.size(); i++) {
-                Student student = students.get(i);
-                students.set(i, student.withLegacyMarks(legacyByRoll.getOrDefault(student.getRollNumber(), List.of())));
+                for (int i = 0; i < students.size(); i++) {
+                    Student student = students.get(i);
+                    students.set(i, student.withLegacyMarks(legacyByRoll.getOrDefault(student.getRollNumber(), List.of())));
+                }
             }
         }
         return students;
@@ -211,40 +251,52 @@ public class StudentRepository {
     }
 
     public boolean updateDetails(String rollNumber, String name, double cgpa, double sgpa) throws SQLException {
+        return updateDetails(getActiveDatasetId(), rollNumber, name, cgpa, sgpa);
+    }
+
+    public boolean updateDetails(Long datasetId, String rollNumber, String name, double cgpa, double sgpa) throws SQLException {
         if (name == null || name.isBlank()) throw new IllegalArgumentException("Name cannot be blank.");
         if (!Double.isFinite(cgpa) || cgpa < 0 || cgpa > 10 || !Double.isFinite(sgpa) || sgpa < 0 || sgpa > 10)
             throw new IllegalArgumentException("CGPA and SGPA must be between 0 and 10.");
+        long targetDatasetId = (datasetId != null) ? datasetId : getActiveDatasetId();
         try (Connection connection = DriverManager.getConnection(url, user, password);
-             PreparedStatement statement = connection.prepareStatement("UPDATE students SET name=?,cgpa=?,last_sgpa=? WHERE roll_number=?")) {
-            statement.setString(1, name.trim()); statement.setDouble(2, cgpa); statement.setDouble(3, sgpa); statement.setString(4, rollNumber);
+             PreparedStatement statement = connection.prepareStatement("UPDATE students SET name=?,cgpa=?,last_sgpa=? WHERE dataset_id=? AND roll_number=?")) {
+            statement.setString(1, name.trim()); statement.setDouble(2, cgpa); statement.setDouble(3, sgpa);
+            statement.setLong(4, targetDatasetId); statement.setString(5, rollNumber);
             return statement.executeUpdate() > 0;
         }
     }
 
     public void updateMarks(Student student) throws SQLException {
+        updateMarks(getActiveDatasetId(), student);
+    }
+
+    public void updateMarks(Long datasetId, Student student) throws SQLException {
+        long targetDatasetId = (datasetId != null) ? datasetId : getActiveDatasetId();
         try (Connection connection = DriverManager.getConnection(url, user, password)) {
             connection.setAutoCommit(false);
             try {
-                try (PreparedStatement delete = connection.prepareStatement("DELETE FROM internal_assessments WHERE roll_number=?")) {
-                    delete.setString(1, student.getRollNumber()); delete.executeUpdate();
+                try (PreparedStatement delete = connection.prepareStatement("DELETE FROM internal_assessments WHERE dataset_id=? AND roll_number=?")) {
+                    delete.setLong(1, targetDatasetId); delete.setString(2, student.getRollNumber()); delete.executeUpdate();
                 }
-                insertMarks(connection, student);
+                insertMarks(connection, targetDatasetId, student);
                 connection.commit();
             } catch (SQLException | RuntimeException ex) { connection.rollback(); throw ex; }
         }
     }
 
-    private void insertMarks(Connection connection, Student student) throws SQLException {
-        String sql = "INSERT INTO internal_assessments (roll_number,internal_number,subject_name,exam_marks,"
-                + "assignment1,assignment2,assignment3,quiz1,quiz2,quiz3,imported_legacy) VALUES (?,?,?,?,?,?,?,?,?,?,FALSE)";
+    private void insertMarks(Connection connection, long datasetId, Student student) throws SQLException {
+        String sql = "INSERT INTO internal_assessments (dataset_id,roll_number,internal_number,subject_name,exam_marks,"
+                + "assignment1,assignment2,assignment3,quiz1,quiz2,quiz3,imported_legacy) VALUES (?,?,?,?,?,?,?,?,?,?,?,FALSE)";
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
             for (int exam = 1; exam <= 2; exam++) for (Subject subject : Subject.values()) {
                 SubjectAssessment mark = student.getMarks(exam).get(subject);
                 if (mark == null) throw new IllegalArgumentException("All subject marks are required to save an update.");
-                statement.setString(1, student.getRollNumber()); statement.setInt(2, exam); statement.setString(3, subject.name());
-                statement.setInt(4, mark.getExamMarks());
-                for (int i = 0; i < 3; i++) statement.setInt(5 + i, mark.getAssignmentMarks().get(i));
-                for (int i = 0; i < 3; i++) statement.setInt(8 + i, mark.getQuizMarks().get(i));
+                statement.setLong(1, datasetId);
+                statement.setString(2, student.getRollNumber()); statement.setInt(3, exam); statement.setString(4, subject.name());
+                statement.setInt(5, mark.getExamMarks());
+                for (int i = 0; i < 3; i++) statement.setInt(6 + i, mark.getAssignmentMarks().get(i));
+                for (int i = 0; i < 3; i++) statement.setInt(9 + i, mark.getQuizMarks().get(i));
                 statement.addBatch();
             }
             statement.executeBatch();
@@ -252,9 +304,14 @@ public class StudentRepository {
     }
 
     public boolean delete(String rollNumber) throws SQLException {
+        return delete(getActiveDatasetId(), rollNumber);
+    }
+
+    public boolean delete(Long datasetId, String rollNumber) throws SQLException {
+        long targetDatasetId = (datasetId != null) ? datasetId : getActiveDatasetId();
         try (Connection connection = DriverManager.getConnection(url, user, password);
-             PreparedStatement statement = connection.prepareStatement("DELETE FROM students WHERE roll_number=?")) {
-            statement.setString(1, rollNumber); return statement.executeUpdate() > 0;
+             PreparedStatement statement = connection.prepareStatement("DELETE FROM students WHERE dataset_id=? AND roll_number=?")) {
+            statement.setLong(1, targetDatasetId); statement.setString(2, rollNumber); return statement.executeUpdate() > 0;
         }
     }
 }

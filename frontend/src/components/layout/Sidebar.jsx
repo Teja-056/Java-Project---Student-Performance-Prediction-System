@@ -12,11 +12,13 @@ import {
   Sparkles,
   TrendingUp,
   PieChart,
+  Database,
 } from 'lucide-react';
 
 export default function Sidebar({ collapsed, setCollapsed }) {
   const navItems = [
     { name: 'Dashboard', path: '/', icon: LayoutDashboard },
+    { name: 'Dataset Management', path: '/datasets', icon: Database },
     { name: 'Performance Prediction', path: '/prediction', icon: TrendingUp },
     { name: 'Students', path: '/students', icon: Users },
     { name: 'Subject Performance', path: '/subject-performance', icon: PieChart },

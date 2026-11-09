@@ -70,6 +70,11 @@ public class GeminiSyllabusExtractorTest {
         }
 
         ExtractedCurriculum result = extractor.extractFromBytes(pdfBytes, "small_sample.pdf");
+        if (result == null || result.getSubjects().isEmpty()) {
+            // Live LLM retry against Google Gemini API in case of network throttle
+            Thread.sleep(2500);
+            result = extractor.extractFromBytes(pdfBytes, "small_sample.pdf");
+        }
         assertNotNull(result);
         assertNotNull(result.getDocument());
         System.out.println("Extracted Document Metadata: " + result.getDocument());

@@ -8,6 +8,8 @@ import java.util.regex.Pattern;
 /** Stores one student's identity, academic history, attendance, and two internal mark sets. */
 public class Student {
     private static final Pattern ROLL_PATTERN = Pattern.compile("1602-25-733-\\d{3}");
+    private final Pattern ROLL_PATTERN_INSTANCE = ROLL_PATTERN;
+    private Long datasetId;
     private final String name;
     private final String rollNumber;
     private final Double sem1Sgpa;
@@ -67,13 +69,21 @@ public class Student {
     static Student fromDatabase(String name, String rollNumber, Double sem1Sgpa, double cgpa, double lastSemesterSgpa, Double attendancePercent,
                                 Map<Subject, SubjectAssessment> internal1, Map<Subject, SubjectAssessment> internal2,
                                 List<LegacyMark> legacyMarks) {
-        return new Student(name, rollNumber, sem1Sgpa, cgpa, lastSemesterSgpa, attendancePercent, internal1, internal2, legacyMarks, true);
+        return fromDatabase(1L, name, rollNumber, sem1Sgpa, cgpa, lastSemesterSgpa, attendancePercent, internal1, internal2, legacyMarks);
+    }
+
+    static Student fromDatabase(Long datasetId, String name, String rollNumber, Double sem1Sgpa, double cgpa, double lastSemesterSgpa, Double attendancePercent,
+                                Map<Subject, SubjectAssessment> internal1, Map<Subject, SubjectAssessment> internal2,
+                                List<LegacyMark> legacyMarks) {
+        Student s = new Student(name, rollNumber, sem1Sgpa, cgpa, lastSemesterSgpa, attendancePercent, internal1, internal2, legacyMarks, true);
+        s.datasetId = datasetId;
+        return s;
     }
 
     static Student fromDatabase(String name, String rollNumber, double cgpa, double lastSemesterSgpa,
                                 Map<Subject, SubjectAssessment> internal1, Map<Subject, SubjectAssessment> internal2,
                                 List<LegacyMark> legacyMarks) {
-        return new Student(name, rollNumber, null, cgpa, lastSemesterSgpa, null, internal1, internal2, legacyMarks, true);
+        return fromDatabase(1L, name, rollNumber, null, cgpa, lastSemesterSgpa, null, internal1, internal2, legacyMarks);
     }
 
     private static void checkGpa(String label, double value) {
@@ -95,6 +105,12 @@ public class Student {
         return copy;
     }
 
+    public Long getDatasetId() { return datasetId; }
+    public void setDatasetId(Long datasetId) { this.datasetId = datasetId; }
+    public Student withDatasetId(Long id) {
+        Student copy = fromDatabase(id, name, rollNumber, sem1Sgpa, cgpa, lastSemesterSgpa, attendancePercent, internal1, internal2, legacyMarks);
+        return copy;
+    }
     public String getName() { return name; }
     public String getRollNumber() { return rollNumber; }
     public Double getSem1Sgpa() { return sem1Sgpa; }

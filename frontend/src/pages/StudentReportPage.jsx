@@ -196,6 +196,140 @@ export default function StudentReportPage() {
         </div>
       </div>
 
+      {/* Academic Performance Scoring Model Card */}
+      <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-xs">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-5 border-b border-slate-100">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-indigo-50 text-indigo-700 border border-indigo-200">
+                Performance Evaluation Model
+              </span>
+              <h3 className="text-base font-bold text-slate-900">Academic Performance Scoring Breakdown</h3>
+            </div>
+            <p className="text-xs text-slate-500 mt-1">
+              Formula: <code className="font-mono text-indigo-600 bg-slate-50 px-1 py-0.5 rounded">Final Score = 70% CIE (Credit-Weighted) + 20% Previous SGPA (×10) + 10% Attendance</code>
+            </p>
+          </div>
+
+          <div className="flex items-center gap-3 bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-100">
+            <div>
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Final Academic Score</span>
+              <p className="text-2xl font-bold font-mono text-indigo-600">
+                {report.finalAcademicScore != null ? report.finalAcademicScore.toFixed(2) : '—'}
+                <span className="text-xs text-slate-400 font-normal"> / 100</span>
+              </p>
+            </div>
+            <div className="w-px h-8 bg-slate-200" />
+            <div>
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 block mb-0.5">Classification</span>
+              <Badge status={report.riskClassification} />
+            </div>
+          </div>
+        </div>
+
+        {/* 3 Formula Components Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-5">
+          {/* CIE Component (70%) */}
+          <div className="p-4 rounded-xl bg-slate-50/80 border border-slate-100">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs font-bold text-slate-700">1. Current Semester CIE</span>
+              <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-indigo-100 text-indigo-700">70% Weight</span>
+            </div>
+            <div className="mt-2 space-y-1">
+              <div className="flex justify-between text-xs">
+                <span className="text-slate-500">Credit-Weighted CIE:</span>
+                <span className="font-bold font-mono text-slate-800">{report.overallCiePercentage != null ? `${report.overallCiePercentage.toFixed(2)}%` : '—'}</span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-slate-500">Contribution (0.70 × CIE):</span>
+                <span className="font-bold font-mono text-indigo-600">+{report.cieComponent != null ? report.cieComponent.toFixed(2) : '—'} pts</span>
+              </div>
+              <p className="text-[10px] text-slate-400 pt-1 border-t border-slate-200/60 mt-1">
+                Weighted across 19 total curriculum credits
+              </p>
+            </div>
+          </div>
+
+          {/* SGPA Component (20%) */}
+          <div className="p-4 rounded-xl bg-slate-50/80 border border-slate-100">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs font-bold text-slate-700">2. Previous Semester SGPA</span>
+              <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-blue-100 text-blue-700">20% Weight</span>
+            </div>
+            <div className="mt-2 space-y-1">
+              <div className="flex justify-between text-xs">
+                <span className="text-slate-500">Semester II SGPA (×10):</span>
+                <span className="font-bold font-mono text-slate-800">{report.lastSemesterSgpa != null ? `${(report.lastSemesterSgpa * 10).toFixed(1)}%` : '—'}</span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-slate-500">Contribution (0.20 × SGPA × 10):</span>
+                <span className="font-bold font-mono text-blue-600">+{report.sgpaComponent != null ? report.sgpaComponent.toFixed(2) : '—'} pts</span>
+              </div>
+              <p className="text-[10px] text-slate-400 pt-1 border-t border-slate-200/60 mt-1">
+                Measured on 10.0 scale ({report.lastSemesterSgpa?.toFixed(2) || 'N/A'})
+              </p>
+            </div>
+          </div>
+
+          {/* Attendance Component (10%) */}
+          <div className="p-4 rounded-xl bg-slate-50/80 border border-slate-100">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs font-bold text-slate-700">3. Student Attendance</span>
+              <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-700">10% Weight</span>
+            </div>
+            <div className="mt-2 space-y-1">
+              <div className="flex justify-between text-xs">
+                <span className="text-slate-500">Attendance Percentage:</span>
+                <span className="font-bold font-mono text-slate-800">{report.attendancePercent != null ? `${report.attendancePercent.toFixed(1)}%` : '—'}</span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-slate-500">Contribution (0.10 × Att):</span>
+                <span className="font-bold font-mono text-emerald-600">+{report.attendanceComponent != null ? report.attendanceComponent.toFixed(2) : '—'} pts</span>
+              </div>
+              <p className="text-[10px] text-slate-400 pt-1 border-t border-slate-200/60 mt-1">
+                Configurable project default threshold: 75.0%
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Warning Flags Bar */}
+        <div className="mt-4 pt-4 border-t border-slate-100 flex flex-wrap gap-2.5 items-center">
+          <span className="text-xs font-semibold text-slate-500">Warning Indicators:</span>
+
+          {report.attendanceWarning ? (
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-200">
+              <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+              Attendance Warning: {report.attendancePercent?.toFixed(1)}% is below 75.0% project default threshold
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+              Attendance Meets Default Threshold (≥ 75.0%)
+            </span>
+          )}
+
+          {report.criticalAcademicWarning ? (
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold bg-rose-50 text-rose-800 border border-rose-200">
+              <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
+              Critical Academic Warning: Overall CIE ({report.overallCiePercentage?.toFixed(1)}%) &lt; 40.0%
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+              CIE Meets Passing Minimum (≥ 40.0%)
+            </span>
+          )}
+
+          {report.incompleteAssessmentWarning && (
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-200">
+              <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+              Incomplete Assessment Warning: Missing marks detected
+            </span>
+          )}
+        </div>
+      </div>
+
       {/* Section C: Subject-Wise Performance Detailed Breakdown */}
       <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-xs">
         <div className="flex items-center justify-between mb-4">

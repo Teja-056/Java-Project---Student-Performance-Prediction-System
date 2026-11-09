@@ -1,15 +1,28 @@
-import React, { useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
-import { Search, Menu, Bell, ShieldCheck } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { useLocation, useNavigate, Link } from 'react-router-dom';
+import { Search, Menu, Bell, ShieldCheck, Layers } from 'lucide-react';
+import { datasetService } from '../../api/datasetService';
 
 export default function Header({ onMobileMenuToggle }) {
   const location = useLocation();
   const navigate = useNavigate();
   const [quickRoll, setQuickRoll] = useState('');
+  const [activeDataset, setActiveDataset] = useState(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    datasetService.getActiveDataset()
+      .then((data) => {
+        if (isMounted) setActiveDataset(data);
+      })
+      .catch(() => {});
+    return () => { isMounted = false; };
+  }, [location.pathname]);
 
   const getPageInfo = () => {
     const path = location.pathname;
     if (path === '/') return { title: 'Academic Performance Dashboard', subtitle: 'Cohort monitoring and predictive diagnostics' };
+    if (path.startsWith('/datasets')) return { title: 'Dataset Management', subtitle: 'Multi-cohort student dataset isolation and switching' };
     if (path.startsWith('/students') && path.includes('/report')) return { title: 'Student Performance Report', subtitle: 'Detailed internal assessment breakdown and AI analysis' };
     if (path.startsWith('/students')) return { title: 'Student Management & Search', subtitle: 'Search student records and review individual standings' };
     if (path.startsWith('/analytics')) return { title: 'Subject Performance Analytics', subtitle: 'Seven core theory subjects cohort distribution' };
@@ -58,6 +71,18 @@ export default function Header({ onMobileMenuToggle }) {
         </form>
 
         <div className="h-6 w-px bg-slate-200 hidden md:block" />
+
+        {activeDataset && (
+          <Link
+            to="/datasets"
+            className="hidden sm:flex items-center space-x-2 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-xl px-3 py-1 text-xs text-emerald-800 transition-colors shadow-2xs group cursor-pointer"
+            title="Click to manage or switch datasets"
+          >
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+            <span className="font-semibold truncate max-w-[140px]">{activeDataset.name}</span>
+            <span className="text-emerald-600 font-mono text-[11px]">({activeDataset.validCount} stds)</span>
+          </Link>
+        )}
 
         <div className="flex items-center space-x-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-1 text-xs text-slate-600">
           <ShieldCheck className="w-4 h-4 text-emerald-600" />

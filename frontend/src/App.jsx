@@ -9,12 +9,14 @@ import ExcelUploadPage from './pages/ExcelUploadPage';
 import SyllabusPage from './pages/SyllabusPage';
 import PredictionPage from './pages/PredictionPage';
 import SubjectPerformancePage from './pages/SubjectPerformancePage';
+import DatasetManagementPage from './pages/DatasetManagementPage';
 
 export default function App() {
   return (
     <Routes>
       <Route path="/" element={<MainLayout />}>
         <Route index element={<DashboardPage />} />
+        <Route path="datasets" element={<DatasetManagementPage />} />
         <Route path="prediction" element={<PredictionPage />} />
         <Route path="prediction/:rollNo" element={<PredictionPage />} />
         <Route path="students" element={<StudentsPage />} />

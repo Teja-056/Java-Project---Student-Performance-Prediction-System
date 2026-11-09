@@ -235,7 +235,7 @@ public class SyllabusRepository {
             // 2a. Match by course code
             if (!courseCode.isBlank() && !courseCode.equals("UNKNOWN") && !courseCode.contains("XXXX")) {
                 try (PreparedStatement p = c.prepareStatement(
-                        "SELECT subject_id FROM syllabus_subjects WHERE course_code = ?")) {
+                        "SELECT subject_id FROM syllabus_subjects WHERE course_code = ? ORDER BY subject_id ASC")) {
                     p.setString(1, courseCode);
                     try (ResultSet rs = p.executeQuery()) {
                         if (rs.next()) existingId = rs.getLong(1);
@@ -248,7 +248,7 @@ public class SyllabusRepository {
                 Subject matched = subject.getMatchedSemesterSubject();
                 if (matched != null && matched != Subject.OE) {
                     try (PreparedStatement p = c.prepareStatement(
-                            "SELECT subject_id FROM syllabus_subjects WHERE course_code = ? OR UPPER(TRIM(subject_name)) = ? OR UPPER(TRIM(subject_name)) = ?")) {
+                            "SELECT subject_id FROM syllabus_subjects WHERE course_code = ? OR UPPER(TRIM(subject_name)) = ? OR UPPER(TRIM(subject_name)) = ? ORDER BY subject_id ASC")) {
                         p.setString(1, matched.getCourseCode());
                         p.setString(2, matched.getFullName().toUpperCase(java.util.Locale.ROOT));
                         p.setString(3, matched.getDisplayName().toUpperCase(java.util.Locale.ROOT));
@@ -262,7 +262,7 @@ public class SyllabusRepository {
             // 2c. If still not found, match by exact subject name (excluding generic open electives) only if course code is unknown
             if (existingId == null && (courseCode.isBlank() || courseCode.equals("UNKNOWN")) && !subject.isOpenElective()) {
                 try (PreparedStatement p = c.prepareStatement(
-                        "SELECT subject_id FROM syllabus_subjects WHERE UPPER(TRIM(subject_name)) = ?")) {
+                        "SELECT subject_id FROM syllabus_subjects WHERE UPPER(TRIM(subject_name)) = ? ORDER BY subject_id ASC")) {
                     p.setString(1, subject.getName().trim().toUpperCase(java.util.Locale.ROOT));
                     try (ResultSet rs = p.executeQuery()) {
                         if (rs.next()) existingId = rs.getLong(1);

@@ -24,6 +24,14 @@ public class StudentResponseDto {
     private String strongestSubject;
     private String weakestSubject;
     private String prediction;
+    private Double overallCiePercentage;
+    private Double finalAcademicScore;
+    private String academicClassification;
+    private Boolean criticalAcademicWarning;
+    private Boolean attendanceWarning;
+    private Boolean incompleteAssessmentWarning;
+    private Map<String, Double> subjectCiePercentages;
+    private Map<String, Integer> subjectCredits;
     private Map<String, SubjectAssessmentDto> internal1Marks;
     private Map<String, SubjectAssessmentDto> internal2Marks;
 
@@ -52,7 +60,23 @@ public class StudentResponseDto {
             this.strongestSubject = strong != null ? strong.getDisplayName() : null;
             Subject weak = analyzer.weakestSubject(student);
             this.weakestSubject = weak != null ? weak.getDisplayName() : null;
-            this.prediction = analyzer.prediction(student);
+        }
+
+        PerformanceAnalyzer.AcademicEvaluation eval = analyzer.evaluateStudent(student);
+        this.overallCiePercentage = eval.overallCiePercentage();
+        this.finalAcademicScore = eval.finalAcademicScore();
+        this.academicClassification = eval.primaryClassification();
+        this.criticalAcademicWarning = eval.criticalAcademicWarning();
+        this.attendanceWarning = eval.attendanceWarning();
+        this.incompleteAssessmentWarning = eval.incompleteAssessmentWarning();
+        this.prediction = eval.primaryClassification();
+
+        this.subjectCiePercentages = new LinkedHashMap<>();
+        this.subjectCredits = new LinkedHashMap<>();
+        for (Subject s : Subject.values()) {
+            Double sCie = eval.subjectCiePercentages().get(s);
+            this.subjectCiePercentages.put(s.name(), sCie != null && !Double.isNaN(sCie) ? PerformanceAnalyzer.round2(sCie) : null);
+            this.subjectCredits.put(s.name(), eval.subjectCredits().get(s));
         }
 
         this.internal1Marks = new LinkedHashMap<>();
@@ -87,6 +111,14 @@ public class StudentResponseDto {
     public String getStrongestSubject() { return strongestSubject; }
     public String getWeakestSubject() { return weakestSubject; }
     public String getPrediction() { return prediction; }
+    public Double getOverallCiePercentage() { return overallCiePercentage; }
+    public Double getFinalAcademicScore() { return finalAcademicScore; }
+    public String getAcademicClassification() { return academicClassification; }
+    public Boolean getCriticalAcademicWarning() { return criticalAcademicWarning; }
+    public Boolean getAttendanceWarning() { return attendanceWarning; }
+    public Boolean getIncompleteAssessmentWarning() { return incompleteAssessmentWarning; }
+    public Map<String, Double> getSubjectCiePercentages() { return subjectCiePercentages; }
+    public Map<String, Integer> getSubjectCredits() { return subjectCredits; }
     public Map<String, SubjectAssessmentDto> getInternal1Marks() { return internal1Marks; }
     public Map<String, SubjectAssessmentDto> getInternal2Marks() { return internal2Marks; }
 }

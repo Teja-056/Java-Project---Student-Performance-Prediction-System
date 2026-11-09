@@ -32,8 +32,8 @@ public class GeminiSyllabusExtractor {
 
     private static final String API_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models/";
     private static final int MAX_BATCH_PAGES = 15;
-    private static final int MAX_RETRIES = 3;
-    private static final long INITIAL_RETRY_BACKOFF_MS = 2000;
+    private static final int MAX_RETRIES = 5;
+    private static final long INITIAL_RETRY_BACKOFF_MS = 2500;
 
     private final String apiKey;
     private final String model;

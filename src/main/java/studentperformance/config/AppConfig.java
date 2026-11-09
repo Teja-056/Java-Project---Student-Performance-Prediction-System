@@ -42,6 +42,11 @@ public class AppConfig {
     }
 
     @Bean
+    public DatasetRepository datasetRepository() {
+        return new DatasetRepository(dbUrl, dbUser, dbPassword);
+    }
+
+    @Bean
     public SyllabusRepository syllabusRepository() {
         return new SyllabusRepository(dbUrl, dbUser, dbPassword);
     }

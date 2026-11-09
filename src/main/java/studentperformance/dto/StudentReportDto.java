@@ -21,6 +21,14 @@ public class StudentReportDto {
     private Boolean internal1IsPartial;
     private Boolean internal2IsPartial;
     private Double combinedInternalPercentage;
+    private Double overallCiePercentage;
+    private Double finalAcademicScore;
+    private Double cieComponent;
+    private Double sgpaComponent;
+    private Double attendanceComponent;
+    private Boolean criticalAcademicWarning;
+    private Boolean attendanceWarning;
+    private Boolean incompleteAssessmentWarning;
     private String strongestSubject;
     private String weakestSubject;
     private String riskClassification;
@@ -54,10 +62,25 @@ public class StudentReportDto {
             this.strongestSubject = strong != null ? strong.getDisplayName() : null;
             Subject weak = analyzer.weakestSubject(student);
             this.weakestSubject = weak != null ? weak.getDisplayName() : null;
-            this.riskClassification = analyzer.prediction(student);
-        } else {
-            this.riskClassification = "Incomplete Assessment Records";
         }
+
+        PerformanceAnalyzer.AcademicEvaluation eval = analyzer.evaluateStudent(student);
+        this.overallCiePercentage = eval.overallCiePercentage();
+        this.finalAcademicScore = eval.finalAcademicScore();
+        if (eval.isComplete()) {
+            this.cieComponent = PerformanceAnalyzer.round2(0.70 * eval.overallCiePercentage());
+            this.sgpaComponent = PerformanceAnalyzer.round2(0.20 * (eval.previousSemesterSgpa() * 10.0));
+            this.attendanceComponent = PerformanceAnalyzer.round2(0.10 * eval.attendancePercentage());
+            this.riskClassification = eval.primaryClassification();
+        } else {
+            this.cieComponent = null;
+            this.sgpaComponent = null;
+            this.attendanceComponent = null;
+            this.riskClassification = "Incomplete assessment data";
+        }
+        this.criticalAcademicWarning = eval.criticalAcademicWarning();
+        this.attendanceWarning = eval.attendanceWarning();
+        this.incompleteAssessmentWarning = eval.incompleteAssessmentWarning();
 
         // Subject breakdown
         this.subjectBreakdown = new ArrayList<>();
@@ -156,6 +179,14 @@ public class StudentReportDto {
     public Boolean getInternal1IsPartial() { return internal1IsPartial; }
     public Boolean getInternal2IsPartial() { return internal2IsPartial; }
     public Double getCombinedInternalPercentage() { return combinedInternalPercentage; }
+    public Double getOverallCiePercentage() { return overallCiePercentage; }
+    public Double getFinalAcademicScore() { return finalAcademicScore; }
+    public Double getCieComponent() { return cieComponent; }
+    public Double getSgpaComponent() { return sgpaComponent; }
+    public Double getAttendanceComponent() { return attendanceComponent; }
+    public Boolean getCriticalAcademicWarning() { return criticalAcademicWarning; }
+    public Boolean getAttendanceWarning() { return attendanceWarning; }
+    public Boolean getIncompleteAssessmentWarning() { return incompleteAssessmentWarning; }
     public String getStrongestSubject() { return strongestSubject; }
     public String getWeakestSubject() { return weakestSubject; }
     public String getRiskClassification() { return riskClassification; }

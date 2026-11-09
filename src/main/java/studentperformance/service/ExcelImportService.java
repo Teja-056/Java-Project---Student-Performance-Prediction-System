@@ -19,13 +19,16 @@ import java.util.stream.Collectors;
 public class ExcelImportService {
 
     private final StudentRepository studentRepository;
+    private final DatasetRepository datasetRepository;
     private final ExcelImporter excelImporter;
     private final PerformanceAnalyzer performanceAnalyzer;
 
     public ExcelImportService(StudentRepository studentRepository,
+                              DatasetRepository datasetRepository,
                               ExcelImporter excelImporter,
                               PerformanceAnalyzer performanceAnalyzer) {
         this.studentRepository = studentRepository;
+        this.datasetRepository = datasetRepository;
         this.excelImporter = excelImporter;
         this.performanceAnalyzer = performanceAnalyzer;
     }
@@ -67,9 +70,21 @@ public class ExcelImportService {
 
             if (commit) {
                 if (!result.getValidStudents().isEmpty()) {
-                    studentRepository.saveBatch(result.getValidStudents());
+                    Dataset dataset = new Dataset();
+                    dataset.setDatasetCode("DS-" + System.currentTimeMillis());
+                    dataset.setName("Imported Cohort - " + originalName.replaceFirst("\\.[^.]+$", ""));
+                    dataset.setOriginalFilename(originalName);
+                    dataset.setTotalRows(result.getTotalRowsRead());
+                    dataset.setValidCount(result.getValidCount());
+                    dataset.setInvalidCount(result.getInvalidCount());
+                    dataset.setStatus("READY");
+                    dataset.setActive(false);
+                    Long newDatasetId = datasetRepository.save(dataset);
+
+                    studentRepository.saveBatch(newDatasetId, result.getValidStudents());
+                    datasetRepository.activate(newDatasetId);
                     actuallyCommitted = true;
-                    message = "Successfully imported " + result.getValidCount() + " student records into MySQL database.";
+                    message = "Successfully created dataset #" + newDatasetId + " with " + result.getValidCount() + " student records and activated it.";
                 } else {
                     message = "Import failed: Zero valid student records were found in the file.";
                 }

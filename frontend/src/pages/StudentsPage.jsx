@@ -70,6 +70,7 @@ export default function StudentsPage() {
     if (statusFilter === 'GOOD') return s.prediction === 'Good Progress' || s.prediction === 'Consistent Performer';
     if (statusFilter === 'MONITOR') return s.prediction === 'Monitor Progress';
     if (statusFilter === 'SUPPORT') return s.prediction === 'May Need Additional Support';
+    if (statusFilter === 'ATTN_WARN') return Boolean(s.attendanceWarning);
     return true;
   });
 
@@ -137,9 +138,10 @@ export default function StudentsPage() {
             </span>
             {[
               { id: 'ALL', label: 'All Students' },
-              { id: 'GOOD', label: 'On Track' },
-              { id: 'MONITOR', label: 'Monitoring' },
-              { id: 'SUPPORT', label: 'Needs Support' },
+              { id: 'GOOD', label: 'Good Progress (≥75)' },
+              { id: 'MONITOR', label: 'Monitoring (60–74.9)' },
+              { id: 'SUPPORT', label: 'Needs Support (<60)' },
+              { id: 'ATTN_WARN', label: 'Attendance Warning (<75%)' },
             ].map((f) => (
               <button
                 key={f.id}
@@ -178,10 +180,10 @@ export default function StudentsPage() {
                   <th className="py-3.5 px-4">Student Name</th>
                   <th className="py-3.5 px-3 text-right">CGPA</th>
                   <th className="py-3.5 px-3 text-right">Prev SGPA</th>
-                  <th className="py-3.5 px-3 text-right" title="Internal 1 Weighted Aggregate (Max: 290 marks across 8 subjects)">Int 1 %</th>
-                  <th className="py-3.5 px-3 text-right" title="Internal 2 Weighted Aggregate (Max: 290 marks across 8 subjects)">Int 2 %</th>
-                  <th className="py-3.5 px-3 text-right">Combined %</th>
-                  <th className="py-3.5 px-4 text-center">Status / Prediction</th>
+                  <th className="py-3.5 px-3 text-right" title="Credit-Weighted Current CIE Percentage (70% weight)">Overall CIE %</th>
+                  <th className="py-3.5 px-3 text-right" title="Student Attendance (10% weight)">Attendance</th>
+                  <th className="py-3.5 px-3 text-right" title="Final Academic Score = 70% CIE + 20% SGPA + 10% Attendance">Final Score</th>
+                  <th className="py-3.5 px-4 text-center">Status / Classification</th>
                   <th className="py-3.5 px-4 text-right">Action</th>
                 </tr>
               </thead>
@@ -197,38 +199,50 @@ export default function StudentsPage() {
                     <td className="py-3.5 px-3 text-right font-bold text-slate-900">
                       {st.cgpa?.toFixed(2) || 'N/A'}
                     </td>
-                    <td className="py-3.5 px-3 text-right text-slate-600">
+                    <td className="py-3.5 px-3 text-right text-slate-600 font-mono">
                       {st.lastSemesterSgpa?.toFixed(2) || 'N/A'}
                     </td>
                     <td className="py-3.5 px-3 text-right">
-                      {st.internal1Percentage != null ? (
-                        <span className="inline-flex items-center gap-1 font-semibold text-slate-800 font-mono">
-                          {st.internal1Percentage.toFixed(1)}%
-                          {st.internal1IsPartial && (
-                            <span className="text-[10px] text-amber-600 font-bold" title="Partial assessment (<290 max marks)">*</span>
-                          )}
+                      {st.overallCiePercentage != null ? (
+                        <span className="font-semibold text-slate-800 font-mono">
+                          {st.overallCiePercentage.toFixed(1)}%
                         </span>
                       ) : (
                         <span className="text-slate-400">—</span>
                       )}
                     </td>
                     <td className="py-3.5 px-3 text-right">
-                      {st.internal2Percentage != null ? (
-                        <span className="inline-flex items-center gap-1 font-semibold text-slate-800 font-mono">
-                          {st.internal2Percentage.toFixed(1)}%
-                          {st.internal2IsPartial && (
-                            <span className="text-[10px] text-amber-600 font-bold" title="Partial assessment (<290 max marks)">*</span>
-                          )}
+                      {st.attendancePercent != null ? (
+                        <span className={`font-mono font-semibold ${st.attendancePercent < 75 ? 'text-amber-600' : 'text-slate-800'}`}>
+                          {st.attendancePercent.toFixed(1)}%
                         </span>
                       ) : (
                         <span className="text-slate-400">—</span>
                       )}
                     </td>
-                    <td className="py-3.5 px-3 text-right font-semibold text-indigo-600">
-                      {st.combinedInternalPercentage != null ? `${st.combinedInternalPercentage.toFixed(1)}%` : '—'}
+                    <td className="py-3.5 px-3 text-right">
+                      {st.finalAcademicScore != null ? (
+                        <span className="font-mono font-bold text-sm text-indigo-600">
+                          {st.finalAcademicScore.toFixed(2)}
+                        </span>
+                      ) : (
+                        <span className="text-slate-400">—</span>
+                      )}
                     </td>
                     <td className="py-3.5 px-4 text-center">
-                      <Badge status={st.prediction} size="small" />
+                      <div className="inline-flex items-center gap-1">
+                        <Badge status={st.prediction} size="small" />
+                        {st.attendanceWarning && (
+                          <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded" title="Attendance below 75%">
+                            Attn &lt;75%
+                          </span>
+                        )}
+                        {st.criticalAcademicWarning && (
+                          <span className="text-[10px] font-bold text-rose-700 bg-rose-50 border border-rose-200 px-1.5 py-0.5 rounded" title="CIE below 40%">
+                            Crit!
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="py-3.5 px-4 text-right space-x-1.5 whitespace-nowrap">
                       <Link
