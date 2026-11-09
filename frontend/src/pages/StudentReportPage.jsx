@@ -87,6 +87,13 @@ export default function StudentReportPage() {
           <ArrowLeft className="w-4 h-4" /> Back to Student Roster
         </Link>
         <div className="flex items-center gap-3">
+          <Link
+            to={`/prediction/${encodeURIComponent(rollNo)}`}
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-indigo-600 rounded-xl hover:bg-indigo-700 transition-colors shadow-xs"
+          >
+            <TrendingUp className="w-3.5 h-3.5" />
+            SEE Predictions
+          </Link>
           <button
             onClick={() => window.print()}
             className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors shadow-xs cursor-pointer"
@@ -113,16 +120,34 @@ export default function StudentReportPage() {
             </p>
           </div>
 
-          <div className="flex items-center gap-4 bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-100">
+          <div className="flex items-center gap-4 bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-100 flex-wrap">
+            {report.sem1Sgpa != null && (
+              <>
+                <div>
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Semester I SGPA</span>
+                  <p className="text-xl font-bold text-slate-900">{report.sem1Sgpa.toFixed(2)}</p>
+                </div>
+                <div className="w-px h-8 bg-slate-200" />
+              </>
+            )}
             <div>
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Cumulative CGPA</span>
-              <p className="text-xl font-bold text-slate-900">{report.cgpa?.toFixed(2) || 'N/A'}</p>
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Semester II SGPA</span>
+              <p className="text-xl font-bold text-slate-900">{report.lastSemesterSgpa?.toFixed(2) || 'N/A'}</p>
             </div>
             <div className="w-px h-8 bg-slate-200" />
             <div>
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Previous SGPA</span>
-              <p className="text-xl font-bold text-slate-900">{report.lastSemesterSgpa?.toFixed(2) || 'N/A'}</p>
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Previous CGPA</span>
+              <p className="text-xl font-bold text-slate-900">{report.cgpa?.toFixed(2) || 'N/A'}</p>
             </div>
+            {report.attendancePercent != null && (
+              <>
+                <div className="w-px h-8 bg-slate-200" />
+                <div>
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Attendance</span>
+                  <p className="text-xl font-bold text-emerald-600">{report.attendancePercent.toFixed(1)}%</p>
+                </div>
+              </>
+            )}
           </div>
         </div>
 
@@ -130,23 +155,27 @@ export default function StudentReportPage() {
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-6">
           <div className="p-3.5 bg-slate-50/80 rounded-xl border border-slate-100">
             <span className="text-xs text-slate-500 font-medium">Internal 1 Percentage</span>
-            <p className="text-lg font-bold text-slate-900 mt-1">
+            <p className="text-lg font-bold text-slate-900 mt-1 font-mono">
               {report.internal1Percentage != null ? `${report.internal1Percentage.toFixed(1)}%` : '—'}
             </p>
-            <span className="text-[11px] text-slate-400">Units 1 & 2 Syllabus</span>
+            <span className="text-[11px] text-slate-400">
+              {report.internal1IsPartial ? 'Partial Assessment (<290 marks)' : 'Units 1 & 2 Syllabus (Max: 290)'}
+            </span>
           </div>
 
           <div className="p-3.5 bg-slate-50/80 rounded-xl border border-slate-100">
             <span className="text-xs text-slate-500 font-medium">Internal 2 Percentage</span>
-            <p className="text-lg font-bold text-slate-900 mt-1">
+            <p className="text-lg font-bold text-slate-900 mt-1 font-mono">
               {report.internal2Percentage != null ? `${report.internal2Percentage.toFixed(1)}%` : '—'}
             </p>
-            <span className="text-[11px] text-slate-400">Units 3, 4 & 5 Syllabus</span>
+            <span className="text-[11px] text-slate-400">
+              {report.internal2IsPartial ? 'Partial Assessment (<290 marks)' : 'Units 3, 4 & 5 Syllabus (Max: 290)'}
+            </span>
           </div>
 
           <div className="p-3.5 bg-slate-50/80 rounded-xl border border-slate-100">
             <span className="text-xs text-slate-500 font-medium">Combined Internal Avg</span>
-            <p className="text-lg font-bold text-indigo-600 mt-1">
+            <p className="text-lg font-bold text-indigo-600 mt-1 font-mono">
               {report.combinedInternalPercentage != null ? `${report.combinedInternalPercentage.toFixed(1)}%` : '—'}
             </p>
             <span className="text-[11px] text-slate-400">Weighted CIE Aggregate</span>
@@ -172,7 +201,7 @@ export default function StudentReportPage() {
         <div className="flex items-center justify-between mb-4">
           <div>
             <h3 className="text-base font-bold text-slate-900">Subject-Wise Assessment Breakdown</h3>
-            <p className="text-xs text-slate-500">Internal 1 and Internal 2 marks comparison for the seven theory subjects</p>
+            <p className="text-xs text-slate-500">Internal 1 and Internal 2 marks comparison for the eight theory subjects</p>
           </div>
           <span className="text-xs text-slate-400 font-mono">Max: 40/30 CIE</span>
         </div>
@@ -193,8 +222,8 @@ export default function StudentReportPage() {
             <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
               {report.subjectBreakdown?.map((subj) => {
                 const change = subj.trendPercentage;
-                const isPositive = change > 0;
-                const isNegative = change < 0;
+                const isPositive = change != null && change > 0;
+                const isNegative = change != null && change < 0;
 
                 return (
                   <tr key={subj.subjectCode} className="hover:bg-slate-50/50 transition-colors">
@@ -203,24 +232,36 @@ export default function StudentReportPage() {
                       <span className="ml-2 font-mono text-slate-400 text-[11px]">({subj.subjectCode})</span>
                     </td>
                     <td className="py-3 px-3 text-right text-slate-500 font-mono">{subj.maxMarks}</td>
-                    <td className="py-3 px-3 text-right font-mono text-slate-800">{subj.internal1Marks?.toFixed(1) || '0.0'}</td>
-                    <td className="py-3 px-3 text-right text-slate-600 font-semibold">{subj.internal1Percentage?.toFixed(1)}%</td>
-                    <td className="py-3 px-3 text-right font-mono text-slate-800">{subj.internal2Marks?.toFixed(1) || '0.0'}</td>
-                    <td className="py-3 px-3 text-right text-slate-600 font-semibold">{subj.internal2Percentage?.toFixed(1)}%</td>
+                    <td className="py-3 px-3 text-right font-mono text-slate-800">
+                      {subj.internal1Marks != null ? subj.internal1Marks.toFixed(1) : '—'}
+                    </td>
+                    <td className="py-3 px-3 text-right text-slate-600 font-semibold">
+                      {subj.internal1Percentage != null ? `${subj.internal1Percentage.toFixed(1)}%` : '—'}
+                    </td>
+                    <td className="py-3 px-3 text-right font-mono text-slate-800">
+                      {subj.internal2Marks != null ? subj.internal2Marks.toFixed(1) : '—'}
+                    </td>
+                    <td className="py-3 px-3 text-right text-slate-600 font-semibold">
+                      {subj.internal2Percentage != null ? `${subj.internal2Percentage.toFixed(1)}%` : '—'}
+                    </td>
                     <td className="py-3 px-4 text-center">
-                      <span
-                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${
-                          isPositive
-                            ? 'bg-emerald-50 text-emerald-700'
-                            : isNegative
-                            ? 'bg-rose-50 text-rose-700'
-                            : 'bg-slate-100 text-slate-600'
-                        }`}
-                      >
-                        {isPositive && <TrendingUp className="w-3 h-3" />}
-                        {isNegative && <TrendingDown className="w-3 h-3" />}
-                        {change > 0 ? `+${change.toFixed(1)}%` : `${change.toFixed(1)}%`}
-                      </span>
+                      {change != null ? (
+                        <span
+                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${
+                            isPositive
+                              ? 'bg-emerald-50 text-emerald-700'
+                              : isNegative
+                              ? 'bg-rose-50 text-rose-700'
+                              : 'bg-slate-100 text-slate-600'
+                          }`}
+                        >
+                          {isPositive && <TrendingUp className="w-3 h-3" />}
+                          {isNegative && <TrendingDown className="w-3 h-3" />}
+                          {isPositive ? `+${change.toFixed(1)}%` : `${change.toFixed(1)}%`}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-slate-400">N/A</span>
+                      )}
                     </td>
                   </tr>
                 );
@@ -332,14 +373,50 @@ export default function StudentReportPage() {
 
         {aiData && !aiLoading && (
           <div className="mt-6 space-y-6">
-            {/* Metadata Bar */}
-            <div className="flex flex-wrap items-center justify-between gap-2 p-3 rounded-xl bg-indigo-900/40 border border-indigo-700/50 text-xs text-indigo-200">
-              <span className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-                Provider: <strong>{aiData.provider}</strong> ({aiData.model})
-              </span>
-              <span>Grounding: <strong>{aiData.syllabusGroundingStatus}</strong></span>
-              <span>Generated: <strong>{aiData.generatedAt}</strong></span>
+            {/* Grounding & Verification Panel */}
+            <div className="p-4 rounded-xl bg-indigo-900/40 border border-indigo-700/50 space-y-2.5 text-xs text-indigo-200">
+              <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-indigo-800/60">
+                <span className="flex items-center gap-1.5 font-semibold">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                  AI Provider: <strong>{aiData.provider}</strong> ({aiData.model})
+                </span>
+                <span>Generated: <strong>{aiData.generatedAt}</strong></span>
+              </div>
+              <div className="text-xs">
+                <span className="text-indigo-300 font-semibold block mb-0.5">Curriculum Grounding Status:</span>
+                <p className="text-indigo-100 font-medium">{aiData.syllabusGroundingStatus}</p>
+              </div>
+              {aiData.groundedSubjects?.length > 0 && (
+                <div className="pt-1.5">
+                  <span className="text-[11px] font-bold text-emerald-300 uppercase tracking-wide block mb-1">
+                    Verified Syllabus Grounded Courses:
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {aiData.groundedSubjects.map((gs, idx) => (
+                      <span key={idx} className="bg-emerald-950/60 border border-emerald-500/40 text-emerald-200 px-2.5 py-1 rounded-lg text-xs font-mono">
+                        ✓ {gs}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {aiData.missingSyllabusSubjects?.length > 0 && (
+                <div className="pt-1.5">
+                  <span className="text-[11px] font-bold text-amber-300 uppercase tracking-wide block mb-0.5">
+                    No Approved Syllabus Available For:
+                  </span>
+                  <p className="text-[11px] text-amber-200/80 mb-1.5">
+                    Notice: No approved syllabus PDF is uploaded for these subjects. Recommendations for these subjects are grounded strictly in measured internal exam marks and performance trends.
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {aiData.missingSyllabusSubjects.map((ms, idx) => (
+                      <span key={idx} className="bg-amber-950/40 border border-amber-500/30 text-amber-200 px-2 py-0.5 rounded-lg text-[11px]">
+                        • {ms}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Academic Summary */}
@@ -391,13 +468,10 @@ export default function StudentReportPage() {
               </div>
             </div>
 
-            {/* Recommended Interventions & Daily Hours */}
+            {/* Recommended Interventions */}
             <div className="p-4 rounded-xl bg-white/5 border border-white/10">
               <div className="flex items-center justify-between mb-2">
                 <h4 className="text-xs uppercase font-bold tracking-wider text-amber-400">Actionable Interventions</h4>
-                <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-amber-400/20 text-amber-300 flex items-center gap-1">
-                  <Clock className="w-3 h-3" /> Recommended Daily Study: {aiData.suggestedDailyStudyHours} hrs
-                </span>
               </div>
               <ul className="space-y-1.5 text-xs text-indigo-100">
                 {aiData.recommendedInterventions?.map((inv, i) => (

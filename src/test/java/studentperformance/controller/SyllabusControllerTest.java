@@ -97,4 +97,101 @@ public class SyllabusControllerTest {
                 .andExpect(jsonPath("$.status").value(404))
                 .andExpect(jsonPath("$.message").value("Syllabus document with ID 999 was not found."));
     }
+
+    @Test
+    @DisplayName("GET /api/syllabus/approved - returns approved syllabuses")
+    void testGetApprovedSyllabuses() throws Exception {
+        SyllabusDocument doc = new SyllabusDocument("approved_syllabus.pdf");
+        SyllabusDocumentDto dto = new SyllabusDocumentDto(10L, doc, "APPROVED");
+
+        when(syllabusService.getApprovedDocuments()).thenReturn(List.of(dto));
+
+        mockMvc.perform(get("/api/syllabus/approved"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].id").value(10))
+                .andExpect(jsonPath("$[0].status").value("APPROVED"));
+    }
+
+    @Test
+    @DisplayName("GET /api/syllabus/review-required - returns review-required syllabuses")
+    void testGetReviewRequiredSyllabuses() throws Exception {
+        SyllabusDocument doc = new SyllabusDocument("draft_syllabus.pdf");
+        SyllabusDocumentDto dto = new SyllabusDocumentDto(11L, doc, "REVIEW_REQUIRED");
+
+        when(syllabusService.getReviewRequiredDocuments()).thenReturn(List.of(dto));
+
+        mockMvc.perform(get("/api/syllabus/review-required"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].id").value(11))
+                .andExpect(jsonPath("$[0].status").value("REVIEW_REQUIRED"));
+    }
+
+    @Test
+    @DisplayName("GET /api/syllabus/{id}/validation-report - returns validation report details")
+    void testGetValidationReport() throws Exception {
+        SyllabusDocument doc = new SyllabusDocument("syllabus.pdf");
+        doc.setStatus("REVIEW_REQUIRED");
+        doc.setValidationReportJson("{\"status\":\"PASSED\",\"errors\":[]}");
+        SyllabusDocumentDto dto = new SyllabusDocumentDto(12L, doc, "REVIEW_REQUIRED");
+
+        when(syllabusService.getSyllabusById(12L)).thenReturn(dto);
+
+        mockMvc.perform(get("/api/syllabus/12/validation-report"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.documentId").value(12))
+                .andExpect(jsonPath("$.status").value("REVIEW_REQUIRED"))
+                .andExpect(jsonPath("$.validationReportJson").value("{\"status\":\"PASSED\",\"errors\":[]}"));
+    }
+
+    @Test
+    @DisplayName("POST /api/syllabus/{id}/reject - marks syllabus as failed/rejected")
+    void testRejectSyllabus() throws Exception {
+        SyllabusDocument doc = new SyllabusDocument("syllabus.pdf");
+        doc.setStatus("FAILED");
+        doc.setErrorMessage("Unit 2 missing topics");
+        SyllabusDocumentDto dto = new SyllabusDocumentDto(13L, doc, "FAILED");
+
+        when(syllabusService.rejectSyllabus(eq(13L), any())).thenReturn(dto);
+
+        mockMvc.perform(post("/api/syllabus/13/reject")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"Unit 2 missing topics\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(13))
+                .andExpect(jsonPath("$.status").value("FAILED"));
+    }
+
+    @Test
+    @DisplayName("PUT /api/syllabus/{id} - updates syllabus curriculum")
+    void testUpdateSyllabus() throws Exception {
+        SyllabusDocument doc = new SyllabusDocument("syllabus.pdf");
+        doc.setStatus("REVIEW_REQUIRED");
+        SyllabusDocumentDto dto = new SyllabusDocumentDto(14L, doc, "REVIEW_REQUIRED");
+
+        when(syllabusService.updateSyllabusCurriculum(eq(14L), any())).thenReturn(dto);
+
+        mockMvc.perform(put("/api/syllabus/14")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"documentId\":14,\"subjects\":[]}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(14))
+                .andExpect(jsonPath("$.status").value("REVIEW_REQUIRED"));
+    }
+
+    @Test
+    @DisplayName("POST /api/syllabus/{id}/revalidate - revalidates syllabus curriculum")
+    void testRevalidateSyllabus() throws Exception {
+        SyllabusDocument doc = new SyllabusDocument("syllabus.pdf");
+        doc.setStatus("REVIEW_REQUIRED");
+        SyllabusDocumentDto dto = new SyllabusDocumentDto(15L, doc, "REVIEW_REQUIRED");
+
+        when(syllabusService.revalidateSyllabus(15L)).thenReturn(dto);
+
+        mockMvc.perform(post("/api/syllabus/15/revalidate"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(15))
+                .andExpect(jsonPath("$.status").value("REVIEW_REQUIRED"));
+    }
 }

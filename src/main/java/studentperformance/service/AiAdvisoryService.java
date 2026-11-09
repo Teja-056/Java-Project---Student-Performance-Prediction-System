@@ -9,7 +9,7 @@ import studentperformance.exception.ResourceNotFoundException;
 
 import java.io.IOException;
 import java.sql.SQLException;
-import java.util.List;
+import java.util.*;
 
 @Service
 public class AiAdvisoryService {
@@ -55,11 +55,41 @@ public class AiAdvisoryService {
 
         // Check for approved college syllabus documents in MySQL
         List<SyllabusDocument> syllabuses = List.of();
+        List<String> groundedSubjects = new ArrayList<>();
+        List<String> missingSyllabusSubjects = new ArrayList<>();
         String groundingStatus = "NO_APPROVED_SYLLABUS_AVAILABLE";
+
         try {
             syllabuses = syllabusRepository.findApproved();
             if (syllabuses != null && !syllabuses.isEmpty()) {
-                groundingStatus = "GROUNDED (" + syllabuses.size() + " approved syllabus document(s) loaded)";
+                Map<Subject, String> sourceMap = new EnumMap<>(Subject.class);
+                for (SyllabusDocument doc : syllabuses) {
+                    for (SyllabusSubject subj : doc.getSubjects()) {
+                        Subject matched = subj.getMatchedSemesterSubject();
+                        if (matched != null && !subj.getUnits().isEmpty()) {
+                            sourceMap.put(matched, doc.getFilename());
+                        }
+                    }
+                }
+
+                for (Subject s : Subject.values()) {
+                    if (sourceMap.containsKey(s)) {
+                        groundedSubjects.add(s.getFullName() + " (" + s.getCourseCode() + ") grounded from " + sourceMap.get(s));
+                    } else {
+                        missingSyllabusSubjects.add(s.getFullName() + " (" + s.getCourseCode() + ")");
+                    }
+                }
+
+                if (!groundedSubjects.isEmpty()) {
+                    groundingStatus = "PARTIALLY_GROUNDED (" + groundedSubjects.size() + " of 8 subjects grounded from approved syllabus)";
+                    if (missingSyllabusSubjects.isEmpty()) {
+                        groundingStatus = "FULLY_GROUNDED (All 8 subjects verified from approved syllabus)";
+                    }
+                }
+            } else {
+                for (Subject s : Subject.values()) {
+                    missingSyllabusSubjects.add(s.getFullName() + " (" + s.getCourseCode() + ")");
+                }
             }
         } catch (Exception e) {
             System.err.println("Note: Syllabus lookup: " + e.getMessage());
@@ -68,7 +98,8 @@ public class AiAdvisoryService {
         try {
             // Strictly anonymized: name and roll number are never sent to Gemini
             AiAnalysisResult result = aiService.analyzeStudent(student, performanceAnalyzer, syllabuses);
-            return new AiAnalysisResponseDto(result, aiService.getProviderName(), aiService.getModel(), groundingStatus);
+            return new AiAnalysisResponseDto(result, aiService.getProviderName(), aiService.getModel(),
+                    groundingStatus, groundedSubjects, missingSyllabusSubjects);
         } catch (IOException e) {
             throw new AiServiceException("Failed to obtain AI analysis from " + aiService.getProviderName() + ": " + e.getMessage(), e);
         } catch (InterruptedException e) {

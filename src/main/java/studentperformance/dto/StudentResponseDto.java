@@ -11,10 +11,14 @@ import java.util.Map;
 public class StudentResponseDto {
     private String rollNumber;
     private String name;
+    private Double sem1Sgpa;
     private double cgpa;
     private double lastSemesterSgpa;
+    private Double attendancePercent;
     private Double internal1Percentage;
     private Double internal2Percentage;
+    private Boolean internal1IsPartial;
+    private Boolean internal2IsPartial;
     private Double combinedInternalPercentage;
     private boolean hasBothInternals;
     private String strongestSubject;
@@ -28,15 +32,19 @@ public class StudentResponseDto {
     public StudentResponseDto(Student student, PerformanceAnalyzer analyzer) {
         this.rollNumber = student.getRollNumber();
         this.name = student.getName();
+        this.sem1Sgpa = student.getSem1Sgpa();
         this.cgpa = student.getCgpa();
         this.lastSemesterSgpa = student.getLastSemesterSgpa();
+        this.attendancePercent = student.getAttendancePercent();
         this.hasBothInternals = analyzer.hasBothInternals(student);
 
-        if (analyzer.isInternalComplete(student, 1)) {
+        if (analyzer.possibleMarks(student, 1) > 0) {
             this.internal1Percentage = analyzer.percentage(student, 1);
+            this.internal1IsPartial = !analyzer.isInternalComplete(student, 1);
         }
-        if (analyzer.isInternalComplete(student, 2)) {
+        if (analyzer.possibleMarks(student, 2) > 0) {
             this.internal2Percentage = analyzer.percentage(student, 2);
+            this.internal2IsPartial = !analyzer.isInternalComplete(student, 2);
         }
         if (hasBothInternals) {
             this.combinedInternalPercentage = analyzer.currentInternalPercentage(student);
@@ -66,10 +74,14 @@ public class StudentResponseDto {
 
     public String getRollNumber() { return rollNumber; }
     public String getName() { return name; }
+    public Double getSem1Sgpa() { return sem1Sgpa; }
     public double getCgpa() { return cgpa; }
     public double getLastSemesterSgpa() { return lastSemesterSgpa; }
+    public Double getAttendancePercent() { return attendancePercent; }
     public Double getInternal1Percentage() { return internal1Percentage; }
     public Double getInternal2Percentage() { return internal2Percentage; }
+    public Boolean getInternal1IsPartial() { return internal1IsPartial; }
+    public Boolean getInternal2IsPartial() { return internal2IsPartial; }
     public Double getCombinedInternalPercentage() { return combinedInternalPercentage; }
     public boolean isHasBothInternals() { return hasBothInternals; }
     public String getStrongestSubject() { return strongestSubject; }

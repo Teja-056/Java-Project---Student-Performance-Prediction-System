@@ -14,6 +14,9 @@ public class DatabaseMigrator {
         createMigrationTables(connection);
         MigrationReport report = migrateOldMarks(connection);
         createSyllabusTables(connection);
+        applyV7SyllabusRedesign(connection);
+        applyV8SyllabusAccuracyAndReprocessing(connection);
+        applyV9SyllabusRelationalRepair(connection);
         return report;
     }
 
@@ -50,22 +53,219 @@ public class DatabaseMigrator {
                     + "('V3_SYLLABUS','Added normalized syllabus document, subject, unit, topic and configurable internal-unit mapping tables.')");
         }
         ensureSyllabusSubjectColumns(connection);
+        createSyllabusDocumentSubjectsTable(connection);
+    }
+
+    private void createSyllabusDocumentSubjectsTable(Connection connection) throws SQLException {
+        boolean tableAlreadyExisted = tableExists(connection, "syllabus_document_subjects");
+        try (Statement statement = connection.createStatement()) {
+            statement.executeUpdate("CREATE TABLE IF NOT EXISTS syllabus_document_subjects ("
+                    + "document_id BIGINT NOT NULL, subject_id BIGINT NOT NULL, "
+                    + "PRIMARY KEY (document_id, subject_id), "
+                    + "FOREIGN KEY (document_id) REFERENCES syllabus_documents(document_id) ON DELETE CASCADE, "
+                    + "FOREIGN KEY (subject_id) REFERENCES syllabus_subjects(subject_id) ON DELETE CASCADE, "
+                    + "INDEX idx_doc_sub_doc(document_id), INDEX idx_doc_sub_sub(subject_id)) ENGINE=InnoDB");
+            if (!tableAlreadyExisted) {
+                statement.executeUpdate("INSERT IGNORE INTO syllabus_document_subjects(document_id, subject_id) "
+                        + "SELECT document_id, subject_id FROM syllabus_subjects WHERE document_id IS NOT NULL");
+            }
+        }
     }
 
     private void ensureSyllabusSubjectColumns(Connection connection) throws SQLException {
-        addColumnIfMissing(connection, "department_code", "VARCHAR(20) NOT NULL DEFAULT 'UNKNOWN'");
-        addColumnIfMissing(connection, "semester", "VARCHAR(12) NOT NULL DEFAULT 'UNKNOWN'");
-        addColumnIfMissing(connection, "course_code", "VARCHAR(40) NOT NULL DEFAULT ''");
-        addColumnIfMissing(connection, "credits", "VARCHAR(30) NOT NULL DEFAULT ''");
-        addColumnIfMissing(connection, "total_marks", "VARCHAR(30) NOT NULL DEFAULT ''");
-        addColumnIfMissing(connection, "is_open_elective", "BOOLEAN NOT NULL DEFAULT FALSE");
-        addColumnIfMissing(connection, "course_category", "VARCHAR(30) NOT NULL DEFAULT 'THEORY'");
+        addColumnIfMissing(connection, "syllabus_subjects", "department_code", "VARCHAR(20) NOT NULL DEFAULT 'UNKNOWN'");
+        addColumnIfMissing(connection, "syllabus_subjects", "semester", "VARCHAR(12) NOT NULL DEFAULT 'UNKNOWN'");
+        addColumnIfMissing(connection, "syllabus_subjects", "course_code", "VARCHAR(40) NOT NULL DEFAULT ''");
+        addColumnIfMissing(connection, "syllabus_subjects", "credits", "VARCHAR(30) NOT NULL DEFAULT ''");
+        addColumnIfMissing(connection, "syllabus_subjects", "total_marks", "VARCHAR(30) NOT NULL DEFAULT ''");
+        addColumnIfMissing(connection, "syllabus_subjects", "is_open_elective", "BOOLEAN NOT NULL DEFAULT FALSE");
+        addColumnIfMissing(connection, "syllabus_subjects", "course_category", "VARCHAR(30) NOT NULL DEFAULT 'THEORY'");
     }
 
-    private void addColumnIfMissing(Connection connection, String column, String definition) throws SQLException {
-        if (!columnExists(connection, "syllabus_subjects", column)) {
+    private void applyV7SyllabusRedesign(Connection connection) throws SQLException {
+        // Document metadata and validation report storage
+        addColumnIfMissing(connection, "syllabus_documents", "institution", "VARCHAR(255) NULL");
+        addColumnIfMissing(connection, "syllabus_documents", "academic_scheme", "VARCHAR(50) NULL");
+        addColumnIfMissing(connection, "syllabus_documents", "academic_year", "VARCHAR(50) NULL");
+        addColumnIfMissing(connection, "syllabus_documents", "branch", "VARCHAR(100) NULL");
+        addColumnIfMissing(connection, "syllabus_documents", "semester", "VARCHAR(20) NULL");
+        addColumnIfMissing(connection, "syllabus_documents", "validation_report", "LONGTEXT NULL");
+        try (Statement s = connection.createStatement()) {
+            s.executeUpdate("ALTER TABLE syllabus_documents MODIFY COLUMN validation_report LONGTEXT NULL");
+        } catch (SQLException ignored) {}
+        addColumnIfMissing(connection, "syllabus_documents", "error_message", "TEXT NULL");
+
+        // Page number references
+        addColumnIfMissing(connection, "syllabus_units", "page_number", "INT NULL");
+        addColumnIfMissing(connection, "syllabus_topics", "page_number", "INT NULL");
+
+        // Lifecycle status constraint update (PROCESSING, REVIEW_REQUIRED, REVIEW, APPROVED, FAILED)
+        updateSyllabusDocumentStatusConstraint(connection);
+
+        // Record migration version
+        try (PreparedStatement p = connection.prepareStatement(
+                "INSERT IGNORE INTO schema_migrations(version, detail) VALUES (?, ?)")) {
+            p.setString(1, "V7_SYLLABUS_GEMINI_REDESIGN");
+            p.setString(2, "Added document metadata, source page numbers, and extended lifecycle statuses (PROCESSING, REVIEW_REQUIRED, APPROVED, FAILED).");
+            p.executeUpdate();
+        }
+    }
+
+    private boolean isMigrationApplied(Connection connection, String version) {
+        try (PreparedStatement p = connection.prepareStatement("SELECT 1 FROM schema_migrations WHERE version = ?")) {
+            p.setString(1, version);
+            try (ResultSet rs = p.executeQuery()) {
+                return rs.next();
+            }
+        } catch (SQLException e) {
+            return false;
+        }
+    }
+
+    private void applyV8SyllabusAccuracyAndReprocessing(Connection connection) throws SQLException {
+        addColumnIfMissing(connection, "syllabus_documents", "extraction_engine", "VARCHAR(50) NULL DEFAULT 'LEGACY'");
+        addColumnIfMissing(connection, "syllabus_documents", "pdf_path", "VARCHAR(500) NULL");
+        addColumnIfMissing(connection, "syllabus_documents", "parent_document_id", "BIGINT NULL");
+        try (Statement s = connection.createStatement()) {
+            s.executeUpdate("CREATE INDEX IF NOT EXISTS idx_syllabus_parent_document ON syllabus_documents(parent_document_id)");
+        } catch (SQLException ignored) {}
+
+        if (!isMigrationApplied(connection, "V8_SYLLABUS_ACCURACY_REPROCESSING")) {
+            // Correct legacy contaminated topics and deduplicate subjects (one-time Phase 5.1 cleanup)
+            repairLegacySyllabusContamination(connection);
+
+            try (PreparedStatement p = connection.prepareStatement(
+                    "INSERT IGNORE INTO schema_migrations(version, detail) VALUES (?, ?)")) {
+                p.setString(1, "V8_SYLLABUS_ACCURACY_REPROCESSING");
+                p.setString(2, "Added extraction_engine, pdf_path, and parent_document_id for safe legacy reprocessing and revision tracking.");
+                p.executeUpdate();
+            }
+        }
+    }
+
+    private void applyV9SyllabusRelationalRepair(Connection connection) throws SQLException {
+        // Drop hazardous foreign key constraint syllabus_subjects_ibfk_1 (document_id CASCADE delete on syllabus_subjects)
+        try (Statement s = connection.createStatement()) {
+            s.executeUpdate("ALTER TABLE syllabus_subjects DROP FOREIGN KEY syllabus_subjects_ibfk_1");
+        } catch (SQLException ignored) {
+            // Constraint may not exist or already dropped
+        }
+
+        // Make syllabus_subjects.document_id nullable so canonical subjects can exist independently of documents
+        try (Statement s = connection.createStatement()) {
+            s.executeUpdate("ALTER TABLE syllabus_subjects MODIFY COLUMN document_id BIGINT NULL");
+        } catch (SQLException ignored) {}
+
+        // Record migration version
+        try (PreparedStatement p = connection.prepareStatement(
+                "INSERT IGNORE INTO schema_migrations(version, detail) VALUES (?, ?)")) {
+            p.setString(1, "V9_SYLLABUS_RELATIONAL_REPAIR");
+            p.setString(2, "Dropped hazardous CASCADE foreign key on syllabus_subjects(document_id) to prevent canonical subject deletion.");
+            p.executeUpdate();
+        }
+    }
+
+    private void repairLegacySyllabusContamination(Connection connection) {
+        try (Statement s = connection.createStatement()) {
+            // 1. Remove contaminated Critical Thinking topics mistakenly inserted into Data Structures (course UI25PC310CS)
+            s.executeUpdate("DELETE t FROM syllabus_topics t "
+                    + "JOIN syllabus_units u ON u.unit_id = t.unit_id "
+                    + "JOIN syllabus_subjects s ON s.subject_id = u.subject_id "
+                    + "WHERE s.course_code = 'UI25PC310CS' AND ("
+                    + "t.topic_text LIKE '%Logic and reasoning%' OR t.topic_text LIKE '%identifying assumptions%' "
+                    + "OR t.topic_text LIKE '%bias and fallacies%' OR t.topic_text LIKE '%Evaluating evidence%' "
+                    + "OR t.topic_text LIKE '%drawing logical conclusions%' OR t.topic_text LIKE '%differentiating facts from opinions%' "
+                    + "OR t.topic_text LIKE '%Root Cause Analysis%' OR t.topic_text LIKE '%5 Whys%' "
+                    + "OR t.topic_text LIKE '%Decision Trees%' OR t.topic_text LIKE '%SWOT Analysis%' "
+                    + "OR t.topic_text LIKE '%ethical dilemmas%' OR t.topic_text LIKE '%Critical thinking in action%' "
+                    + "OR t.topic_text LIKE '%debating complex engineering issues%')");
+
+            // 2. Remove contaminated Communication Skills topics mistakenly inserted into TTPS (course U25BS340MA)
+            s.executeUpdate("DELETE t FROM syllabus_topics t "
+                    + "JOIN syllabus_units u ON u.unit_id = t.unit_id "
+                    + "JOIN syllabus_subjects s ON s.subject_id = u.subject_id "
+                    + "WHERE s.course_code = 'U25BS340MA' AND ("
+                    + "t.topic_text LIKE '%communication: intrapersonal%' OR t.topic_text LIKE '%types of listening%' "
+                    + "OR t.topic_text LIKE '%Team building: stages%' OR t.topic_text LIKE '%Paragraph writing%' "
+                    + "OR t.topic_text LIKE '%Grammar focus%' OR t.topic_text LIKE '%Styles, channels and flow of communication%' "
+                    + "OR t.topic_text LIKE '%Letter writing and email etiquette%' OR t.topic_text LIKE '%Reading comprehension%' "
+                    + "OR t.topic_text LIKE '%Barriers to communication%' OR t.topic_text LIKE '%MODEL INGESTION%' "
+                    + "OR t.topic_text LIKE '%Yesterday Was Beautiful%')");
+
+            // 3. Remove font corruption duplicates (? prefix) in DS and TTPS
+            s.executeUpdate("DELETE t FROM syllabus_topics t "
+                    + "JOIN syllabus_units u ON u.unit_id = t.unit_id "
+                    + "JOIN syllabus_subjects s ON s.subject_id = u.subject_id "
+                    + "WHERE (s.course_code = 'UI25PC310CS' OR s.course_code = 'U25BS340MA') "
+                    + "AND t.topic_text LIKE '? %'");
+
+            // 4. Remove test topics from production DS subject
+            s.executeUpdate("DELETE t FROM syllabus_topics t "
+                    + "JOIN syllabus_units u ON u.unit_id = t.unit_id "
+                    + "JOIN syllabus_subjects s ON s.subject_id = u.subject_id "
+                    + "WHERE s.course_code = 'UI25PC310CS' AND ("
+                    + "t.topic_text LIKE 'DS Unit %' OR t.topic_text = 'Original Topic')");
+
+            // 5. Deduplicate subjects dynamically and safely: remap any duplicate subjects to MIN(subject_id)
+            try (ResultSet rs = s.executeQuery(
+                    "SELECT course_code, MIN(subject_id) as canonical_id, COUNT(*) as cnt "
+                    + "FROM syllabus_subjects "
+                    + "WHERE course_code IS NOT NULL AND course_code != '' AND course_code != 'UNKNOWN' AND course_code NOT LIKE '%XXXX%' "
+                    + "GROUP BY course_code HAVING COUNT(*) > 1")) {
+                java.util.List<long[]> duplicates = new java.util.ArrayList<>();
+                while (rs.next()) {
+                    long canonicalId = rs.getLong("canonical_id");
+                    String code = rs.getString("course_code");
+                    try (PreparedStatement p = connection.prepareStatement(
+                            "SELECT subject_id FROM syllabus_subjects WHERE course_code = ? AND subject_id != ?")) {
+                        p.setString(1, code);
+                        p.setLong(2, canonicalId);
+                        try (ResultSet r2 = p.executeQuery()) {
+                            while (r2.next()) {
+                                duplicates.add(new long[]{canonicalId, r2.getLong("subject_id")});
+                            }
+                        }
+                    }
+                }
+                for (long[] pair : duplicates) {
+                    long canonicalId = pair[0];
+                    long duplicateId = pair[1];
+                    try (PreparedStatement up = connection.prepareStatement(
+                            "UPDATE IGNORE syllabus_document_subjects SET subject_id = ? WHERE subject_id = ?")) {
+                        up.setLong(1, canonicalId);
+                        up.setLong(2, duplicateId);
+                        up.executeUpdate();
+                    }
+                    try (PreparedStatement del = connection.prepareStatement(
+                            "DELETE FROM syllabus_subjects WHERE subject_id = ?")) {
+                        del.setLong(1, duplicateId);
+                        del.executeUpdate();
+                    }
+                }
+            }
+        } catch (SQLException e) {
+            System.err.println("Notice: repairLegacySyllabusContamination: " + e.getMessage());
+        }
+    }
+
+    private void updateSyllabusDocumentStatusConstraint(Connection connection) {
+        try (Statement s = connection.createStatement()) {
+            s.executeUpdate("ALTER TABLE syllabus_documents DROP CHECK chk_syllabus_status");
+        } catch (SQLException ignored) {
+            // Constraint may not exist or cannot be dropped
+        }
+        try (Statement s = connection.createStatement()) {
+            s.executeUpdate("ALTER TABLE syllabus_documents ADD CONSTRAINT chk_syllabus_status "
+                    + "CHECK (status IN ('PROCESSING', 'REVIEW_REQUIRED', 'REVIEW', 'APPROVED', 'FAILED'))");
+        } catch (SQLException e) {
+            System.err.println("Notice: chk_syllabus_status constraint update: " + e.getMessage());
+        }
+    }
+
+    private void addColumnIfMissing(Connection connection, String table, String column, String definition) throws SQLException {
+        if (!columnExists(connection, table, column)) {
             try (Statement statement = connection.createStatement()) {
-                statement.executeUpdate("ALTER TABLE syllabus_subjects ADD COLUMN " + column + " " + definition);
+                statement.executeUpdate("ALTER TABLE " + table + " ADD COLUMN " + column + " " + definition);
             }
         }
     }

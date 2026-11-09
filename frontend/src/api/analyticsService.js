@@ -5,4 +5,11 @@ export const analyticsService = {
     const res = await api.get('/analytics/subjects');
     return res.data;
   },
+
+  async getSubjectPerformance(subject = 'DS', assessment = 'COMBINED') {
+    const res = await api.get('/analytics/subject-performance', {
+      params: { subject, assessment },
+    });
+    return res.data;
+  },
 };

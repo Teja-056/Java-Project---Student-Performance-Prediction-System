@@ -69,4 +69,50 @@ public class SyllabusSubject {
     }
     public void setCategory(SyllabusCategory value) { category=value==null?SyllabusCategory.OTHER:value; openElective=category==SyllabusCategory.OPEN_ELECTIVE; }
     public List<SyllabusUnit> getUnits() { return units; }
+
+    public void addUnit(SyllabusUnit unit) {
+        if (unit == null) return;
+        for (SyllabusUnit existing : units) {
+            if (existing.getNumber() == unit.getNumber()) {
+                if ((existing.getTitle().isBlank() || existing.getTitle().matches("(?i)^unit\\s*[-–—:：.?]?[ivx0-9]+$"))
+                        && !unit.getTitle().isBlank()) {
+                    existing.setTitle(unit.getTitle());
+                }
+                for (SyllabusTopic t : unit.getTopics()) {
+                    boolean topicExists = existing.getTopics().stream()
+                            .anyMatch(et -> et.getText().trim().equalsIgnoreCase(t.getText().trim()));
+                    if (!topicExists) {
+                        existing.getTopics().add(t);
+                    }
+                }
+                return;
+            }
+        }
+        units.add(unit);
+    }
+
+    public SyllabusUnit getOrCreateUnit(int number, String title) {
+        for (SyllabusUnit existing : units) {
+            if (existing.getNumber() == number) {
+                if ((existing.getTitle().isBlank() || existing.getTitle().matches("(?i)^unit\\s*[-–—:：.?]?[ivx0-9]+$"))
+                        && title != null && !title.isBlank() && !title.matches("(?i)^unit\\s*[-–—:：.?]?[ivx0-9]+$")) {
+                    existing.setTitle(title.trim());
+                }
+                return existing;
+            }
+        }
+        String t = (title == null || title.isBlank()) ? "Unit " + number : title.trim();
+        SyllabusUnit u = new SyllabusUnit(number, t);
+        units.add(u);
+        return u;
+    }
+
+    public Subject getMatchedSemesterSubject() {
+        if (openElective || category == SyllabusCategory.OPEN_ELECTIVE) {
+            return Subject.OE;
+        }
+        Subject matched = Subject.matchByText(courseCode);
+        if (matched != null) return matched;
+        return Subject.matchByText(name);
+    }
 }

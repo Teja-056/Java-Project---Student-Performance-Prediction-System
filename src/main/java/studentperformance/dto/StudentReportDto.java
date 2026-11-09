@@ -12,10 +12,14 @@ import java.util.Map;
 public class StudentReportDto {
     private String rollNumber;
     private String name;
+    private Double sem1Sgpa;
     private double cgpa;
     private double lastSemesterSgpa;
+    private Double attendancePercent;
     private Double internal1Percentage;
     private Double internal2Percentage;
+    private Boolean internal1IsPartial;
+    private Boolean internal2IsPartial;
     private Double combinedInternalPercentage;
     private String strongestSubject;
     private String weakestSubject;
@@ -30,15 +34,19 @@ public class StudentReportDto {
     public StudentReportDto(Student student, PerformanceAnalyzer analyzer, Map<Integer, List<Integer>> unitMapping) {
         this.rollNumber = student.getRollNumber();
         this.name = student.getName();
+        this.sem1Sgpa = student.getSem1Sgpa();
         this.cgpa = student.getCgpa();
         this.lastSemesterSgpa = student.getLastSemesterSgpa();
+        this.attendancePercent = student.getAttendancePercent();
         this.completeRecord = analyzer.hasBothInternals(student);
 
-        if (analyzer.isInternalComplete(student, 1)) {
+        if (analyzer.possibleMarks(student, 1) > 0) {
             this.internal1Percentage = analyzer.percentage(student, 1);
+            this.internal1IsPartial = !analyzer.isInternalComplete(student, 1);
         }
-        if (analyzer.isInternalComplete(student, 2)) {
+        if (analyzer.possibleMarks(student, 2) > 0) {
             this.internal2Percentage = analyzer.percentage(student, 2);
+            this.internal2IsPartial = !analyzer.isInternalComplete(student, 2);
         }
         if (completeRecord) {
             this.combinedInternalPercentage = analyzer.currentInternalPercentage(student);
@@ -57,18 +65,21 @@ public class StudentReportDto {
             double p1 = analyzer.subjectPercentage(student, 1, s);
             double p2 = analyzer.subjectPercentage(student, 2, s);
             double change = analyzer.subjectChange(student, s);
-            double total1 = student.getMarks(1).containsKey(s) ? student.getMarks(1).get(s).totalMarks() : 0.0;
-            double total2 = student.getMarks(2).containsKey(s) ? student.getMarks(2).get(s).totalMarks() : 0.0;
+            Double total1 = student.getMarks(1).containsKey(s) ? student.getMarks(1).get(s).totalMarks() : null;
+            Double total2 = student.getMarks(2).containsKey(s) ? student.getMarks(2).get(s).totalMarks() : null;
+            Double pct1 = Double.isNaN(p1) ? null : p1;
+            Double pct2 = Double.isNaN(p2) ? null : p2;
+            Double trend = Double.isNaN(change) ? null : change;
 
             subjectBreakdown.add(new SubjectPerformanceDetailDto(
                     s.name(),
                     s.getDisplayName(),
                     s.getMaximumTotalMarks(),
                     total1,
-                    p1,
+                    pct1,
                     total2,
-                    p2,
-                    change
+                    pct2,
+                    trend
             ));
         }
 
@@ -104,16 +115,16 @@ public class StudentReportDto {
         private String subjectCode;
         private String subjectName;
         private int maxMarks;
-        private double internal1Marks;
-        private double internal1Percentage;
-        private double internal2Marks;
-        private double internal2Percentage;
-        private double trendPercentage;
+        private Double internal1Marks;
+        private Double internal1Percentage;
+        private Double internal2Marks;
+        private Double internal2Percentage;
+        private Double trendPercentage;
 
         public SubjectPerformanceDetailDto(String subjectCode, String subjectName, int maxMarks,
-                                           double internal1Marks, double internal1Percentage,
-                                           double internal2Marks, double internal2Percentage,
-                                           double trendPercentage) {
+                                           Double internal1Marks, Double internal1Percentage,
+                                           Double internal2Marks, Double internal2Percentage,
+                                           Double trendPercentage) {
             this.subjectCode = subjectCode;
             this.subjectName = subjectName;
             this.maxMarks = maxMarks;
@@ -127,19 +138,23 @@ public class StudentReportDto {
         public String getSubjectCode() { return subjectCode; }
         public String getSubjectName() { return subjectName; }
         public int getMaxMarks() { return maxMarks; }
-        public double getInternal1Marks() { return internal1Marks; }
-        public double getInternal1Percentage() { return internal1Percentage; }
-        public double getInternal2Marks() { return internal2Marks; }
-        public double getInternal2Percentage() { return internal2Percentage; }
-        public double getTrendPercentage() { return trendPercentage; }
+        public Double getInternal1Marks() { return internal1Marks; }
+        public Double getInternal1Percentage() { return internal1Percentage; }
+        public Double getInternal2Marks() { return internal2Marks; }
+        public Double getInternal2Percentage() { return internal2Percentage; }
+        public Double getTrendPercentage() { return trendPercentage; }
     }
 
     public String getRollNumber() { return rollNumber; }
     public String getName() { return name; }
+    public Double getSem1Sgpa() { return sem1Sgpa; }
     public double getCgpa() { return cgpa; }
     public double getLastSemesterSgpa() { return lastSemesterSgpa; }
+    public Double getAttendancePercent() { return attendancePercent; }
     public Double getInternal1Percentage() { return internal1Percentage; }
     public Double getInternal2Percentage() { return internal2Percentage; }
+    public Boolean getInternal1IsPartial() { return internal1IsPartial; }
+    public Boolean getInternal2IsPartial() { return internal2IsPartial; }
     public Double getCombinedInternalPercentage() { return combinedInternalPercentage; }
     public String getStrongestSubject() { return strongestSubject; }
     public String getWeakestSubject() { return weakestSubject; }

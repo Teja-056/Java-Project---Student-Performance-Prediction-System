@@ -35,8 +35,10 @@ class ExcelImporterTest {
         Student first = result.getValidStudents().get(0);
         assertEquals("1602-25-733-001", first.getRollNumber());
         assertEquals("Aarav Sharma", first.getName());
-        assertEquals(8.85, first.getCgpa(), 0.001);
+        assertEquals(8.87, first.getCgpa(), 0.001);
         assertEquals(8.90, first.getLastSemesterSgpa(), 0.001);
+        assertEquals(8.85, first.getSem1Sgpa(), 0.001);
+        assertEquals(92.5, first.getAttendancePercent(), 0.001);
         assertTrue(first.getMarks(1).containsKey(Subject.JAVA));
         assertEquals(27, first.getMarks(1).get(Subject.JAVA).getExamMarks());
     }
@@ -175,5 +177,65 @@ class ExcelImporterTest {
         assertEquals(count, result.getValidCount());
         assertEquals(0, result.getInvalidCount());
         assertFalse(result.hasErrors());
+    }
+
+    @Test
+    void verifiesOpenElectiveIn118TemplateAndLegacyCompatibility(@TempDir Path tempDir) throws Exception {
+        // 1. Verify 118-column template generation contains OE
+        Path templatePath = tempDir.resolve("template_118.xlsx");
+        importer.generateTemplate(templatePath);
+        ExcelImporter.ExcelImportResult templateResult = importer.parseAndValidate(templatePath, Set.of());
+        assertEquals(2, templateResult.getValidCount());
+
+        Student sample1 = templateResult.getValidStudents().get(0);
+        assertTrue(sample1.getMarks(1).containsKey(Subject.OE), "118 template must include OE in Internal 1");
+        assertTrue(sample1.getMarks(2).containsKey(Subject.OE), "118 template must include OE in Internal 2");
+        SubjectAssessment oe1 = sample1.getMarks(1).get(Subject.OE);
+        assertEquals(27, oe1.getExamMarks()); // 30 - 3 = 27
+        assertEquals(List.of(5, 4, 5), oe1.getAssignmentMarks());
+        assertEquals(List.of(4, 5, 4), oe1.getQuizMarks());
+
+        // 2. Verify legacy 102-column template (7 subjects without OE)
+        Path legacyPath = tempDir.resolve("legacy_102.xlsx");
+        List<Subject> legacySubjects = List.of(Subject.JAVA, Subject.DS, Subject.CA, Subject.TTPS, Subject.CS, Subject.CT, Subject.HVPE);
+        try (Workbook wb = new XSSFWorkbook()) {
+            Sheet sheet = wb.createSheet("Legacy");
+            Row header = sheet.createRow(0);
+            header.createCell(0).setCellValue("Roll Number");
+            header.createCell(1).setCellValue("Name");
+            header.createCell(2).setCellValue("CGPA");
+            header.createCell(3).setCellValue("SGPA");
+
+            Row r = sheet.createRow(1);
+            r.createCell(0).setCellValue("1602-25-733-010");
+            r.createCell(1).setCellValue("Legacy Student");
+            r.createCell(2).setCellValue(8.50);
+            r.createCell(3).setCellValue(8.75);
+
+            int col = 4;
+            for (int internal = 1; internal <= 2; internal++) {
+                for (Subject s : legacySubjects) {
+                    r.createCell(col++).setCellValue(s.getMaximumExamMarks() - 2);
+                    for (int a = 0; a < 3; a++) r.createCell(col++).setCellValue(4);
+                    for (int q = 0; q < 3; q++) r.createCell(col++).setCellValue(4);
+                }
+            }
+            try (OutputStream out = Files.newOutputStream(legacyPath)) {
+                wb.write(out);
+            }
+        }
+
+        ExcelImporter.ExcelImportResult legacyResult = importer.parseAndValidate(legacyPath, Set.of());
+        assertEquals(1, legacyResult.getValidCount());
+        Student legStudent = legacyResult.getValidStudents().get(0);
+        // OE must remain NULL / not present, NOT converted to 0
+        assertFalse(legStudent.getMarks(1).containsKey(Subject.OE), "Legacy format must keep OE NULL in Internal 1");
+        assertFalse(legStudent.getMarks(2).containsKey(Subject.OE), "Legacy format must keep OE NULL in Internal 2");
+        assertNull(legStudent.getMarks(1).get(Subject.OE));
+        assertNull(legStudent.getMarks(2).get(Subject.OE));
+
+        PerformanceAnalyzer analyzer = new PerformanceAnalyzer();
+        assertFalse(analyzer.isInternalComplete(legStudent, 1), "Internal 1 without OE is incomplete");
+        assertEquals("Incomplete assessment data", analyzer.prediction(legStudent));
     }
 }

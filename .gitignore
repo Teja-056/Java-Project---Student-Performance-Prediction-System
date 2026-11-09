@@ -1,9 +1,12 @@
 target/
 student-performance-report.csv
 *.pdf
+uploads/
 .env
 .env.*
 *.log
+backups/
+database/backup_*.sql
 
 # Frontend build & modules
 frontend/node_modules/

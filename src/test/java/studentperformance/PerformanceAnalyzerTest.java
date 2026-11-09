@@ -18,10 +18,10 @@ class PerformanceAnalyzerTest {
         assertEquals(4.0, javaInternal1.quizAverage(), 0.001);
         assertEquals(22.0, javaInternal1.totalMarks(), 0.001);
         assertEquals(55.0, analyzer.subjectPercentage(student, 1, Subject.JAVA), 0.001);
-        assertEquals(250, Subject.maximumTotal());
-        assertEquals(184.0, analyzer.totalMarks(student, 1), 0.001);
-        assertEquals(193.0, analyzer.totalMarks(student, 2), 0.001);
-        assertEquals(75.4, analyzer.currentInternalPercentage(student), 0.001);
+        assertEquals(290, Subject.maximumTotal());
+        assertEquals(211.0, analyzer.totalMarks(student, 1), 0.001);
+        assertEquals(220.0, analyzer.totalMarks(student, 2), 0.001);
+        assertEquals(74.31, analyzer.currentInternalPercentage(student), 0.01);
         assertTrue(analyzer.hasBothInternals(student));
     }
 

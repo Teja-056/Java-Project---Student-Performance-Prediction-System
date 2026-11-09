@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Search, Users, ArrowRight, Filter, AlertCircle, FileText } from 'lucide-react';
+import { Search, Users, ArrowRight, Filter, AlertCircle, FileText, TrendingUp } from 'lucide-react';
 import { studentService } from '../api/studentService';
 import Badge from '../components/common/Badge';
 import LoadingSpinner from '../components/common/LoadingSpinner';
@@ -178,8 +178,8 @@ export default function StudentsPage() {
                   <th className="py-3.5 px-4">Student Name</th>
                   <th className="py-3.5 px-3 text-right">CGPA</th>
                   <th className="py-3.5 px-3 text-right">Prev SGPA</th>
-                  <th className="py-3.5 px-3 text-right">Int 1 %</th>
-                  <th className="py-3.5 px-3 text-right">Int 2 %</th>
+                  <th className="py-3.5 px-3 text-right" title="Internal 1 Weighted Aggregate (Max: 290 marks across 8 subjects)">Int 1 %</th>
+                  <th className="py-3.5 px-3 text-right" title="Internal 2 Weighted Aggregate (Max: 290 marks across 8 subjects)">Int 2 %</th>
                   <th className="py-3.5 px-3 text-right">Combined %</th>
                   <th className="py-3.5 px-4 text-center">Status / Prediction</th>
                   <th className="py-3.5 px-4 text-right">Action</th>
@@ -200,11 +200,29 @@ export default function StudentsPage() {
                     <td className="py-3.5 px-3 text-right text-slate-600">
                       {st.lastSemesterSgpa?.toFixed(2) || 'N/A'}
                     </td>
-                    <td className="py-3.5 px-3 text-right text-slate-600">
-                      {st.internal1Percentage != null ? `${st.internal1Percentage.toFixed(1)}%` : '—'}
+                    <td className="py-3.5 px-3 text-right">
+                      {st.internal1Percentage != null ? (
+                        <span className="inline-flex items-center gap-1 font-semibold text-slate-800 font-mono">
+                          {st.internal1Percentage.toFixed(1)}%
+                          {st.internal1IsPartial && (
+                            <span className="text-[10px] text-amber-600 font-bold" title="Partial assessment (<290 max marks)">*</span>
+                          )}
+                        </span>
+                      ) : (
+                        <span className="text-slate-400">—</span>
+                      )}
                     </td>
-                    <td className="py-3.5 px-3 text-right text-slate-600">
-                      {st.internal2Percentage != null ? `${st.internal2Percentage.toFixed(1)}%` : '—'}
+                    <td className="py-3.5 px-3 text-right">
+                      {st.internal2Percentage != null ? (
+                        <span className="inline-flex items-center gap-1 font-semibold text-slate-800 font-mono">
+                          {st.internal2Percentage.toFixed(1)}%
+                          {st.internal2IsPartial && (
+                            <span className="text-[10px] text-amber-600 font-bold" title="Partial assessment (<290 max marks)">*</span>
+                          )}
+                        </span>
+                      ) : (
+                        <span className="text-slate-400">—</span>
+                      )}
                     </td>
                     <td className="py-3.5 px-3 text-right font-semibold text-indigo-600">
                       {st.combinedInternalPercentage != null ? `${st.combinedInternalPercentage.toFixed(1)}%` : '—'}
@@ -212,10 +230,18 @@ export default function StudentsPage() {
                     <td className="py-3.5 px-4 text-center">
                       <Badge status={st.prediction} size="small" />
                     </td>
-                    <td className="py-3.5 px-4 text-right">
+                    <td className="py-3.5 px-4 text-right space-x-1.5 whitespace-nowrap">
+                      <Link
+                        to={`/prediction/${encodeURIComponent(st.rollNumber)}`}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-semibold rounded-lg transition-colors"
+                        title="Predict Semester End Exam Marks"
+                      >
+                        <TrendingUp className="w-3.5 h-3.5" />
+                        Predict
+                      </Link>
                       <Link
                         to={`/students/${st.rollNumber}/report`}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold rounded-lg transition-colors"
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold rounded-lg transition-colors"
                       >
                         <FileText className="w-3.5 h-3.5" />
                         Report

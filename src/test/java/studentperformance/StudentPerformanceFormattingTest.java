@@ -29,8 +29,8 @@ class StudentPerformanceFormattingTest {
             Locale.setDefault(oldLocale);
         }
         String report = output.toString(StandardCharsets.UTF_8);
-        assertTrue(report.contains("Internal 1 total: 184.00/250 (73.60%)"), report);
-        assertTrue(report.contains("Internal 2 total: 193.00/250 (77.20%)"), report);
+        assertTrue(report.contains("Internal 1 total: 211.00/290 (72.76%)"), report);
+        assertTrue(report.contains("Internal 2 total: 220.00/290 (75.86%)"), report);
     }
 
     @Test

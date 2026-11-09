@@ -9,11 +9,16 @@ import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import studentperformance.dto.SubjectAnalyticsDto;
+import studentperformance.dto.SubjectCategoryStatsDto;
+import studentperformance.dto.SubjectPerformanceResponseDto;
+import studentperformance.dto.SubjectStudentEntryDto;
 import studentperformance.exception.GlobalExceptionHandler;
 import studentperformance.service.StudentService;
+import studentperformance.service.SubjectPerformanceService;
 
 import java.util.List;
 
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -27,6 +32,9 @@ public class AnalyticsControllerTest {
 
     @MockBean
     private StudentService studentService;
+
+    @MockBean
+    private SubjectPerformanceService subjectPerformanceService;
 
     @Test
     @DisplayName("GET /api/analytics/subjects - returns analytics for all theory subjects")
@@ -53,5 +61,57 @@ public class AnalyticsControllerTest {
                 .andExpect(jsonPath("$[0].requiringImprovementCount").value(8))
                 .andExpect(jsonPath("$[0].averagePercentage").value(76.8))
                 .andExpect(jsonPath("$[1].subjectCode").value("DS"));
+    }
+
+    @Test
+    @DisplayName("GET /api/analytics/subject-performance - returns detailed subject analytics")
+    void testGetSubjectPerformance() throws Exception {
+        SubjectPerformanceResponseDto dto = new SubjectPerformanceResponseDto();
+        dto.setSubjectCode("DS");
+        dto.setSubjectName("Data Structures");
+        dto.setCieMaxMarks(40);
+        dto.setAssessmentType("COMBINED");
+        dto.setTotalStudents(101);
+        dto.setAssessedCount(101);
+        dto.setUnassessedCount(0);
+        dto.setAveragePercentage(78.5);
+        dto.setAverageMarks(31.4);
+        dto.setHighestScore(39.5);
+        dto.setHighestStudentRoll("1602-25-733-001");
+        dto.setHighestStudentName("Pooja Mishra");
+        dto.setLowestScore(18.0);
+        dto.setLowestStudentRoll("1602-25-733-099");
+        dto.setLowestStudentName("Student 99");
+
+        dto.setCategoryStats(List.of(
+                new SubjectCategoryStatsDto("Excellent", "90–100%", 15, 14.9),
+                new SubjectCategoryStatsDto("Very Good", "80–<90%", 30, 29.7),
+                new SubjectCategoryStatsDto("Good", "70–<80%", 35, 34.7),
+                new SubjectCategoryStatsDto("Average", "60–<70%", 15, 14.9),
+                new SubjectCategoryStatsDto("Needs Improvement", "40–<60%", 5, 5.0),
+                new SubjectCategoryStatsDto("At Risk", "Below 40%", 1, 1.0)
+        ));
+
+        SubjectStudentEntryDto student1 = new SubjectStudentEntryDto(
+                "1602-25-733-001", "Pooja Mishra", 39.5, 40, 98.75, "Excellent", 39.0, 40.0, 2.5
+        );
+        dto.setStudents(List.of(student1));
+
+        when(subjectPerformanceService.getSubjectPerformance(eq("DS"), eq("COMBINED"))).thenReturn(dto);
+
+        mockMvc.perform(get("/api/analytics/subject-performance?subject=DS&assessment=COMBINED")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.subjectCode").value("DS"))
+                .andExpect(jsonPath("$.subjectName").value("Data Structures"))
+                .andExpect(jsonPath("$.totalStudents").value(101))
+                .andExpect(jsonPath("$.assessedCount").value(101))
+                .andExpect(jsonPath("$.unassessedCount").value(0))
+                .andExpect(jsonPath("$.averagePercentage").value(78.5))
+                .andExpect(jsonPath("$.highestScore").value(39.5))
+                .andExpect(jsonPath("$.highestStudentName").value("Pooja Mishra"))
+                .andExpect(jsonPath("$.categoryStats.length()").value(6))
+                .andExpect(jsonPath("$.categoryStats[0].category").value("Excellent"))
+                .andExpect(jsonPath("$.students[0].rollNumber").value("1602-25-733-001"));
     }
 }

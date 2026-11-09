@@ -45,7 +45,7 @@ public class StudentRepository {
 
     public int saveBatch(List<Student> batch) throws SQLException {
         if (batch == null || batch.isEmpty()) return 0;
-        String studentSql = "INSERT INTO students (roll_number,name,cgpa,last_sgpa) VALUES (?,?,?,?)";
+        String studentSql = "INSERT INTO students (roll_number,name,sem1_sgpa,cgpa,last_sgpa,attendance_percent) VALUES (?,?,?,?,?,?)";
         String deleteSql = "DELETE FROM internal_assessments WHERE roll_number=?";
         String assessmentSql = "INSERT INTO internal_assessments (roll_number,internal_number,subject_name,exam_marks,"
                 + "assignment1,assignment2,assignment3,quiz1,quiz2,quiz3,imported_legacy) VALUES (?,?,?,?,?,?,?,?,?,?,FALSE)";
@@ -57,8 +57,12 @@ public class StudentRepository {
                     for (Student student : batch) {
                         studentStmt.setString(1, student.getRollNumber());
                         studentStmt.setString(2, student.getName());
-                        studentStmt.setDouble(3, student.getCgpa());
-                        studentStmt.setDouble(4, student.getLastSemesterSgpa());
+                        if (student.getSem1Sgpa() == null) studentStmt.setNull(3, Types.DECIMAL);
+                        else studentStmt.setDouble(3, student.getSem1Sgpa());
+                        studentStmt.setDouble(4, student.getCgpa());
+                        studentStmt.setDouble(5, student.getLastSemesterSgpa());
+                        if (student.getAttendancePercent() == null) studentStmt.setNull(6, Types.DECIMAL);
+                        else studentStmt.setDouble(6, student.getAttendancePercent());
                         studentStmt.addBatch();
                     }
                     studentStmt.executeBatch();
@@ -132,7 +136,7 @@ public class StudentRepository {
     }
 
     private List<Student> findStudents(String requestedRoll) throws SQLException {
-        String sql = "SELECT s.roll_number,s.name,s.cgpa,s.last_sgpa,m.internal_number,m.subject_name,"
+        String sql = "SELECT s.roll_number,s.name,s.sem1_sgpa,s.cgpa,s.last_sgpa,s.attendance_percent,m.internal_number,m.subject_name,"
                 + "m.exam_marks,m.assignment1,m.assignment2,m.assignment3,m.quiz1,m.quiz2,m.quiz3,m.imported_legacy "
                 + "FROM students s LEFT JOIN internal_assessments m ON s.roll_number=m.roll_number "
                 + (requestedRoll == null ? "" : "WHERE s.roll_number=? ") + "ORDER BY s.roll_number,m.internal_number";
@@ -143,18 +147,24 @@ public class StudentRepository {
             if (requestedRoll != null) statement.setString(1, requestedRoll);
             try (ResultSet rows = statement.executeQuery()) {
             String roll = null, name = null;
+            Double sem1 = null;
             double cgpa = 0, sgpa = 0;
+            Double att = null;
             EnumMap<Subject, SubjectAssessment> first = new EnumMap<>(Subject.class);
             EnumMap<Subject, SubjectAssessment> second = new EnumMap<>(Subject.class);
             while (rows.next()) {
                 String nextRoll = rows.getString("roll_number");
                 if (roll != null && !roll.equals(nextRoll)) {
-                    students.add(Student.fromDatabase(name, roll, cgpa, sgpa, first, second, List.of()));
+                    students.add(Student.fromDatabase(name, roll, sem1, cgpa, sgpa, att, first, second, List.of()));
                     first = new EnumMap<>(Subject.class); second = new EnumMap<>(Subject.class);
                 }
                 if (!nextRoll.equals(roll)) {
                     roll = nextRoll; name = rows.getString("name");
+                    double rawSem1 = rows.getDouble("sem1_sgpa");
+                    sem1 = rows.wasNull() ? null : rawSem1;
                     cgpa = rows.getDouble("cgpa"); sgpa = rows.getDouble("last_sgpa");
+                    double rawAtt = rows.getDouble("attendance_percent");
+                    att = rows.wasNull() ? null : rawAtt;
                 }
                 String subjectName = rows.getString("subject_name");
                 if (subjectName != null) {
@@ -169,7 +179,7 @@ public class StudentRepository {
                     if (subject != null) (rows.getInt("internal_number") == 1 ? first : second).put(subject, assessment);
                 }
             }
-            if (roll != null) students.add(Student.fromDatabase(name, roll, cgpa, sgpa, first, second, List.of()));
+            if (roll != null) students.add(Student.fromDatabase(name, roll, sem1, cgpa, sgpa, att, first, second, List.of()));
             }
             Map<String, List<LegacyMark>> legacyByRoll = new HashMap<>();
             try (PreparedStatement legacy = connection.prepareStatement("SELECT roll_number,internal_number,subject_name,raw_marks FROM legacy_internal_marks_archive"

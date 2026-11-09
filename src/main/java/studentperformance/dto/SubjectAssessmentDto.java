@@ -4,7 +4,7 @@ import studentperformance.SubjectAssessment;
 import java.util.List;
 
 public class SubjectAssessmentDto {
-    private int examMarks;
+    private Integer examMarks;
     private Integer assignment1;
     private Integer assignment2;
     private Integer assignment3;
@@ -36,8 +36,8 @@ public class SubjectAssessmentDto {
         }
     }
 
-    public int getExamMarks() { return examMarks; }
-    public void setExamMarks(int examMarks) { this.examMarks = examMarks; }
+    public Integer getExamMarks() { return examMarks; }
+    public void setExamMarks(Integer examMarks) { this.examMarks = examMarks; }
     public Integer getAssignment1() { return assignment1; }
     public void setAssignment1(Integer assignment1) { this.assignment1 = assignment1; }
     public Integer getAssignment2() { return assignment2; }

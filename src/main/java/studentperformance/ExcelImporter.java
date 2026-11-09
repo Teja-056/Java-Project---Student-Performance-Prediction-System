@@ -79,6 +79,17 @@ public class ExcelImporter {
             if (sheet == null) throw new IOException("The Excel file contains no worksheets.");
 
             int headerRowIndex = findHeaderRow(sheet);
+            Row headerRow = sheet.getRow(headerRowIndex);
+            boolean is118Format = false;
+            if (headerRow != null) {
+                String c2 = getCellString(headerRow.getCell(2));
+                String c3 = getCellString(headerRow.getCell(3));
+                if ((c2 != null && c2.toLowerCase(Locale.ROOT).contains("semester i"))
+                        || (c3 != null && c3.toLowerCase(Locale.ROOT).contains("semester ii"))) {
+                    is118Format = true;
+                }
+            }
+
             int startRow = headerRowIndex + 1;
 
             for (int r = startRow; r <= sheet.getLastRowNum(); r++) {
@@ -116,30 +127,80 @@ public class ExcelImporter {
                     name = name.trim();
                 }
 
-                // Col 2: CGPA
-                Double cgpa = getCellDouble(row.getCell(2));
-                if (cgpa == null) {
-                    rowErrors.add("CGPA is missing or not a valid number");
-                } else if (cgpa < 0 || cgpa > 10) {
-                    rowErrors.add("CGPA must be between 0 and 10 (found: " + cgpa + ")");
-                }
+                Double sem1Sgpa = null;
+                Double sem2Sgpa = null;
+                Double cgpa = null;
+                Double attendance = null;
+                int colOffset;
 
-                // Col 3: Previous SGPA
-                Double sgpa = getCellDouble(row.getCell(3));
-                if (sgpa == null) {
-                    rowErrors.add("Previous Semester SGPA is missing or not a valid number");
-                } else if (sgpa < 0 || sgpa > 10) {
-                    rowErrors.add("Previous Semester SGPA must be between 0 and 10 (found: " + sgpa + ")");
+                if (is118Format) {
+                    // Col 2: Semester I SGPA (optional)
+                    sem1Sgpa = getCellDouble(row.getCell(2));
+                    if (sem1Sgpa != null && (sem1Sgpa < 0 || sem1Sgpa > 10)) {
+                        rowErrors.add("Semester I SGPA must be between 0 and 10 (found: " + sem1Sgpa + ")");
+                    }
+
+                    // Col 3: Semester II SGPA (required)
+                    sem2Sgpa = getCellDouble(row.getCell(3));
+                    if (sem2Sgpa == null) {
+                        rowErrors.add("Semester II SGPA is missing or not a valid number");
+                    } else if (sem2Sgpa < 0 || sem2Sgpa > 10) {
+                        rowErrors.add("Semester II SGPA must be between 0 and 10 (found: " + sem2Sgpa + ")");
+                    }
+
+                    // Col 4: Previous CGPA (required)
+                    cgpa = getCellDouble(row.getCell(4));
+                    if (cgpa == null) {
+                        rowErrors.add("Previous CGPA is missing or not a valid number");
+                    } else if (cgpa < 0 || cgpa > 10) {
+                        rowErrors.add("Previous CGPA must be between 0 and 10 (found: " + cgpa + ")");
+                    }
+
+                    // Col 5: Attendance (%) (optional)
+                    attendance = getCellDouble(row.getCell(5));
+                    if (attendance != null && (attendance < 0 || attendance > 100)) {
+                        rowErrors.add("Attendance percentage must be between 0 and 100 (found: " + attendance + ")");
+                    }
+
+                    colOffset = 6;
+                } else {
+                    // Legacy 102-column format
+                    // Col 2: CGPA
+                    cgpa = getCellDouble(row.getCell(2));
+                    if (cgpa == null) {
+                        rowErrors.add("CGPA is missing or not a valid number");
+                    } else if (cgpa < 0 || cgpa > 10) {
+                        rowErrors.add("CGPA must be between 0 and 10 (found: " + cgpa + ")");
+                    }
+
+                    // Col 3: Previous SGPA (Semester II SGPA)
+                    sem2Sgpa = getCellDouble(row.getCell(3));
+                    if (sem2Sgpa == null) {
+                        rowErrors.add("Previous Semester SGPA is missing or not a valid number");
+                    } else if (sem2Sgpa < 0 || sem2Sgpa > 10) {
+                        rowErrors.add("Previous Semester SGPA must be between 0 and 10 (found: " + sem2Sgpa + ")");
+                    }
+
+                    colOffset = 4;
                 }
 
                 // Internal 1 & Internal 2 marks
                 EnumMap<Subject, SubjectAssessment> internal1 = new EnumMap<>(Subject.class);
                 EnumMap<Subject, SubjectAssessment> internal2 = new EnumMap<>(Subject.class);
 
-                int colOffset = 4;
+                int dataCols = row.getLastCellNum();
+                List<Subject> subjectsToRead;
+                if (is118Format) {
+                    subjectsToRead = List.of(Subject.values());
+                } else if (dataCols > 105) {
+                    subjectsToRead = List.of(Subject.values());
+                } else {
+                    subjectsToRead = List.of(Subject.JAVA, Subject.DS, Subject.CA, Subject.TTPS, Subject.CS, Subject.CT, Subject.HVPE);
+                }
+
                 for (int internal = 1; internal <= 2; internal++) {
                     EnumMap<Subject, SubjectAssessment> map = (internal == 1) ? internal1 : internal2;
-                    for (Subject subject : Subject.values()) {
+                    for (Subject subject : subjectsToRead) {
                         SubjectAssessment assessment = readAssessment(row, colOffset, internal, subject, rowErrors);
                         if (assessment != null) {
                             map.put(subject, assessment);
@@ -152,7 +213,9 @@ public class ExcelImporter {
                     invalidRows.add(new RowValidationError(displayRowNum, roll, name, rowErrors));
                 } else {
                     try {
-                        Student student = new Student(name, roll, cgpa, sgpa, internal1, internal2);
+                        double safeCgpa = (cgpa != null) ? cgpa : 0.0;
+                        double safeSem2 = (sem2Sgpa != null) ? sem2Sgpa : 0.0;
+                        Student student = new Student(name, roll, sem1Sgpa, safeCgpa, safeSem2, attendance, internal1, internal2);
                         validStudents.add(student);
                     } catch (IllegalArgumentException ex) {
                         rowErrors.add(ex.getMessage());
@@ -193,6 +256,14 @@ public class ExcelImporter {
                 errors.add("Internal " + internalNum + " " + subject.getDisplayName() + " Quiz " + i + " must be between 0 and 5 (found: " + q + ")");
             }
             quizzes.add(q);
+        }
+
+        // If all 7 fields for this subject are null/blank, treat subject as unassessed (keep as null)
+        boolean hasAnyMark = (exam != null)
+                || assignments.stream().anyMatch(Objects::nonNull)
+                || quizzes.stream().anyMatch(Objects::nonNull);
+        if (!hasAnyMark) {
+            return null;
         }
 
         try {
@@ -314,20 +385,27 @@ public class ExcelImporter {
 
             // Row 0: Section Group Headers
             Row groupRow = sheet.createRow(0);
-            createStyledCell(groupRow, 0, "STUDENT PROFILE INFORMATION", groupStyle1);
-            createStyledCell(groupRow, 4, "INTERNAL 1 ASSESSMENTS", groupStyle2);
-            createStyledCell(groupRow, 53, "INTERNAL 2 ASSESSMENTS", groupStyle3);
+            createStyledCell(groupRow, 0, "STUDENT INFORMATION (6 COLUMNS)", groupStyle1);
+            createStyledCell(groupRow, 6, "INTERNAL 1 ASSESSMENTS (8 SUBJECTS X 7 COLS = 56 COLS)", groupStyle2);
+            createStyledCell(groupRow, 62, "INTERNAL 2 ASSESSMENTS (8 SUBJECTS X 7 COLS = 56 COLS)", groupStyle3);
 
-            // Row 1: Detailed Column Headers
+            // Row 1: Detailed Column Headers (118 Columns)
             Row headerRow = sheet.createRow(1);
-            String[] studentCols = {"Roll Number", "Full Name", "CGPA (0-10)", "Previous Semester SGPA (0-10)"};
+            String[] studentCols = {
+                    "Roll Number",
+                    "Student Name",
+                    "Semester I SGPA",
+                    "Semester II SGPA",
+                    "Previous CGPA",
+                    "Attendance (%)"
+            };
             for (int i = 0; i < studentCols.length; i++) {
                 Cell cell = headerRow.createCell(i);
                 cell.setCellValue(studentCols[i]);
                 cell.setCellStyle(subHeaderStyle);
             }
 
-            int col = 4;
+            int col = 6;
             for (int internal = 1; internal <= 2; internal++) {
                 for (Subject s : Subject.values()) {
                     String prefix = "Int" + internal + "_" + s.getDisplayName() + "_";
@@ -350,7 +428,9 @@ public class ExcelImporter {
             sample1.createCell(1).setCellValue("Aarav Sharma");
             sample1.createCell(2).setCellValue(8.85);
             sample1.createCell(3).setCellValue(8.90);
-            col = 4;
+            sample1.createCell(4).setCellValue(8.87);
+            sample1.createCell(5).setCellValue(92.5);
+            col = 6;
             for (int internal = 1; internal <= 2; internal++) {
                 for (Subject s : Subject.values()) {
                     sample1.createCell(col++).setCellValue(s.getMaximumExamMarks() - 3); // Exam
@@ -369,7 +449,9 @@ public class ExcelImporter {
             sample2.createCell(1).setCellValue("Priya Patel");
             sample2.createCell(2).setCellValue(9.10);
             sample2.createCell(3).setCellValue(9.25);
-            col = 4;
+            sample2.createCell(4).setCellValue(9.17);
+            sample2.createCell(5).setCellValue(95.0);
+            col = 6;
             for (int internal = 1; internal <= 2; internal++) {
                 for (Subject s : Subject.values()) {
                     sample2.createCell(col++).setCellValue(s.getMaximumExamMarks() - 2);
@@ -399,17 +481,17 @@ public class ExcelImporter {
 
     private void populateInstructionsSheet(Sheet sheet) {
         String[][] instructions = {
-                {"EXCEL BULK STUDENT IMPORT GUIDELINES", ""},
+                {"EXCEL BULK STUDENT IMPORT GUIDELINES (118 COLUMNS)", ""},
                 {"", ""},
                 {"1. Roll Number Format", "Must follow format: 1602-25-733-XXX (where XXX is a 3-digit number)."},
                 {"2. Uniqueness", "Roll numbers must be unique within the sheet and must not already exist in MySQL."},
-                {"3. CGPA and SGPA", "Values must be decimals or numbers between 0.00 and 10.00."},
-                {"4. Seven Theory Subjects", "Java, Data Structures (DS), Computer Architecture (CA), TTPS, CS, CT, HVPE."},
-                {"5. Exam Marks Maximums", "Java, DS, CA, TTPS: Maximum 30 marks. CS, CT, HVPE: Maximum 20 marks."},
+                {"3. Student Information (Cols 0-5)", "Roll Number, Full Name, Semester I SGPA (0-10), Semester II SGPA (0-10), Previous CGPA (0-10), Attendance % (0-100)."},
+                {"4. Eight Theory Subjects (19 Credits)", "Java (3 cr), DS (4 cr), CA (3 cr), TTPS (4 cr), OE (2 cr), CS (1 cr), CT (1 cr), HVPE (1 cr)."},
+                {"5. Exam Marks Maximums", "Java, DS, CA, TTPS, OE: Maximum 30 marks. CS, CT, HVPE: Maximum 20 marks."},
                 {"6. Assignment & Quiz Marks", "Every assignment (A1, A2, A3) and quiz (Q1, Q2, Q3) is out of 5 marks (0 to 5)."},
-                {"7. Internal 1 & Internal 2", "Both internals follow the identical subject and mark structure."},
-                {"8. Empty Assessment Cells", "Empty marks cells are permitted for partial records; missing values will not be converted to 0."},
-                {"9. Error Handling", "The system validates every row, highlights any issues, and allows error report export."}
+                {"7. Internal 1 & Internal 2", "Both internals follow identical 8-subject layout (56 columns each). Total columns = 118."},
+                {"8. Empty Assessment Cells", "Empty marks cells are permitted for partial records; missing marks (such as OE) remain unassessed, not zero."},
+                {"9. Backward Compatibility", "Legacy 102-column sheets without Semester I SGPA, attendance, or OE are automatically supported."}
         };
         for (int i = 0; i < instructions.length; i++) {
             Row r = sheet.createRow(i);

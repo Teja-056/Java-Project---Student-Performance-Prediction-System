@@ -192,6 +192,11 @@ public class GeminiLiveConnectivityTest {
         System.out.println("\n=================================================================");
         System.out.println("   GEMINI API LIVE VERIFICATION PASSED ALL 8 STEPS SUCCESSFULLY!");
         System.out.println("=================================================================");
+
+        try {
+            com.mysql.cj.jdbc.AbandonedConnectionCleanupThread.checkedShutdown();
+        } catch (Exception ignored) {
+        }
     }
 
     private static void verifyModelAvailability(String apiKey, String model) {

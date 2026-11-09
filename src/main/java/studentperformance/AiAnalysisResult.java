@@ -30,6 +30,17 @@ public class AiAnalysisResult {
                             List<String> subjectsRequiringImprovement, String trendAnalysis,
                             String estimatedFuturePerformance, String riskLevel,
                             List<String> riskFactors, List<String> recommendedInterventions,
+                            Map<String, String> subjectWiseImprovementPlan,
+                            List<String> revisionStrategies, List<String> focusTopics) {
+        this(academicSummary, strengths, weaknesses, subjectsRequiringImprovement, trendAnalysis,
+                estimatedFuturePerformance, riskLevel, riskFactors, recommendedInterventions,
+                0, subjectWiseImprovementPlan, revisionStrategies, focusTopics);
+    }
+
+    public AiAnalysisResult(String academicSummary, List<String> strengths, List<String> weaknesses,
+                            List<String> subjectsRequiringImprovement, String trendAnalysis,
+                            String estimatedFuturePerformance, String riskLevel,
+                            List<String> riskFactors, List<String> recommendedInterventions,
                             int suggestedDailyStudyHours, Map<String, String> subjectWiseImprovementPlan,
                             List<String> revisionStrategies, List<String> focusTopics) {
         this.academicSummary = academicSummary == null ? "" : academicSummary.trim();

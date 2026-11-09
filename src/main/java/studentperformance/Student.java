@@ -5,50 +5,75 @@ import java.util.Map;
 import java.util.List;
 import java.util.regex.Pattern;
 
-/** Stores one student's identity, academic history, and two internal mark sets. */
+/** Stores one student's identity, academic history, attendance, and two internal mark sets. */
 public class Student {
     private static final Pattern ROLL_PATTERN = Pattern.compile("1602-25-733-\\d{3}");
     private final String name;
     private final String rollNumber;
+    private final Double sem1Sgpa;
     private final double cgpa;
     private final double lastSemesterSgpa;
+    private final Double attendancePercent;
     private final EnumMap<Subject, SubjectAssessment> internal1;
     private final EnumMap<Subject, SubjectAssessment> internal2;
     private final List<LegacyMark> legacyMarks;
 
     public Student(String name, String rollNumber, double cgpa, double lastSemesterSgpa,
                    Map<Subject, SubjectAssessment> internal1, Map<Subject, SubjectAssessment> internal2) {
-        this(name, rollNumber, cgpa, lastSemesterSgpa, internal1, internal2, List.of());
+        this(name, rollNumber, null, cgpa, lastSemesterSgpa, null, internal1, internal2, List.of(), false);
     }
 
     public Student(String name, String rollNumber, double cgpa, double lastSemesterSgpa,
                    Map<Subject, SubjectAssessment> internal1, Map<Subject, SubjectAssessment> internal2,
                    List<LegacyMark> legacyMarks) {
-        this(name, rollNumber, cgpa, lastSemesterSgpa, internal1, internal2, legacyMarks, false);
+        this(name, rollNumber, null, cgpa, lastSemesterSgpa, null, internal1, internal2, legacyMarks, false);
     }
 
-    private Student(String name, String rollNumber, double cgpa, double lastSemesterSgpa,
+    public Student(String name, String rollNumber, Double sem1Sgpa, double cgpa, double lastSemesterSgpa, Double attendancePercent,
+                   Map<Subject, SubjectAssessment> internal1, Map<Subject, SubjectAssessment> internal2) {
+        this(name, rollNumber, sem1Sgpa, cgpa, lastSemesterSgpa, attendancePercent, internal1, internal2, List.of(), false);
+    }
+
+    public Student(String name, String rollNumber, Double sem1Sgpa, double cgpa, double lastSemesterSgpa, Double attendancePercent,
+                   Map<Subject, SubjectAssessment> internal1, Map<Subject, SubjectAssessment> internal2,
+                   List<LegacyMark> legacyMarks) {
+        this(name, rollNumber, sem1Sgpa, cgpa, lastSemesterSgpa, attendancePercent, internal1, internal2, legacyMarks, false);
+    }
+
+    private Student(String name, String rollNumber, Double sem1Sgpa, double cgpa, double lastSemesterSgpa, Double attendancePercent,
                     Map<Subject, SubjectAssessment> internal1, Map<Subject, SubjectAssessment> internal2,
                     List<LegacyMark> legacyMarks, boolean readingLegacyDatabaseRecord) {
         if (name == null || name.isBlank()) throw new IllegalArgumentException("Name cannot be blank.");
         if (rollNumber == null || rollNumber.isBlank() || (!readingLegacyDatabaseRecord && !ROLL_PATTERN.matcher(rollNumber).matches()))
             throw new IllegalArgumentException("Roll number must look like 1602-25-733-XXX (three digits at the end).");
+        if (sem1Sgpa != null) checkGpa("Semester I SGPA", sem1Sgpa);
         checkGpa("CGPA", cgpa);
         checkGpa("Last semester SGPA", lastSemesterSgpa);
+        if (attendancePercent != null && (!Double.isFinite(attendancePercent) || attendancePercent < 0 || attendancePercent > 100))
+            throw new IllegalArgumentException("Attendance percentage must be between 0 and 100.");
+
         this.name = name.trim();
         this.rollNumber = rollNumber;
+        this.sem1Sgpa = sem1Sgpa;
         this.cgpa = cgpa;
         this.lastSemesterSgpa = lastSemesterSgpa;
+        this.attendancePercent = attendancePercent;
         this.internal1 = copyAndValidate(internal1, "Internal 1");
         this.internal2 = copyAndValidate(internal2, "Internal 2");
         this.legacyMarks = List.copyOf(legacyMarks);
     }
 
     /** Database reader may load historical roll formats; new user input remains strictly validated. */
+    static Student fromDatabase(String name, String rollNumber, Double sem1Sgpa, double cgpa, double lastSemesterSgpa, Double attendancePercent,
+                                Map<Subject, SubjectAssessment> internal1, Map<Subject, SubjectAssessment> internal2,
+                                List<LegacyMark> legacyMarks) {
+        return new Student(name, rollNumber, sem1Sgpa, cgpa, lastSemesterSgpa, attendancePercent, internal1, internal2, legacyMarks, true);
+    }
+
     static Student fromDatabase(String name, String rollNumber, double cgpa, double lastSemesterSgpa,
                                 Map<Subject, SubjectAssessment> internal1, Map<Subject, SubjectAssessment> internal2,
                                 List<LegacyMark> legacyMarks) {
-        return new Student(name, rollNumber, cgpa, lastSemesterSgpa, internal1, internal2, legacyMarks, true);
+        return new Student(name, rollNumber, null, cgpa, lastSemesterSgpa, null, internal1, internal2, legacyMarks, true);
     }
 
     private static void checkGpa(String label, double value) {
@@ -72,11 +97,13 @@ public class Student {
 
     public String getName() { return name; }
     public String getRollNumber() { return rollNumber; }
+    public Double getSem1Sgpa() { return sem1Sgpa; }
     public double getCgpa() { return cgpa; }
     public double getLastSemesterSgpa() { return lastSemesterSgpa; }
+    public Double getAttendancePercent() { return attendancePercent; }
     public List<LegacyMark> getLegacyMarks() { return legacyMarks; }
     public Student withLegacyMarks(List<LegacyMark> marks) {
-        return fromDatabase(name, rollNumber, cgpa, lastSemesterSgpa, internal1, internal2, marks);
+        return fromDatabase(name, rollNumber, sem1Sgpa, cgpa, lastSemesterSgpa, attendancePercent, internal1, internal2, marks);
     }
     public Map<Subject, SubjectAssessment> getMarks(int internalNumber) {
         if (internalNumber == 1) return Map.copyOf(internal1);

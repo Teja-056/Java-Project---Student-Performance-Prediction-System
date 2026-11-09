@@ -14,13 +14,20 @@ import org.apache.pdfbox.text.PDFTextStripper;
 
 /** Extracts PDFs as independent syllabus sections so metadata cannot bleed between courses. */
 public class SyllabusParser {
-    private static final Pattern UNIT = Pattern.compile("(?i)^\\s*UNIT\\s*(?:[-–—:：.]\\s*)?([0-9]+|[ivxlcdm]+)(?:\\s*(?:[-–—:：.]\\s*|\\s+)(.*))?\\s*$");
+    private static final Pattern UNIT = Pattern.compile("(?i)^\\s*UNIT\\s*(?:[-–—:：.?]\\s*)?([0-9]+|[ivxlcdm]+)(?:\\s*(?:[-–—:：.?]\\s*|\\s+)(.*))?\\s*$");
     private static final Pattern CODE = Pattern.compile("(?i)\\b[A-Z]{1,}\\d{2,}[A-Z0-9]*\\b");
     private static final Pattern SEMESTER = Pattern.compile("(?i)(?:\\b(I|II|III|IV|V|VI|VII|VIII|[1-8])\\s*[- ]?SEMESTER\\b|\\bSEMESTER\\s*[- ]?(I|II|III|IV|V|VI|VII|VIII|[1-8])\\b)");
-    private static final Pattern CREDITS = Pattern.compile("(?i)\\bcredits?\\s*[:= -]?\\s*(\\d+(?:\\.\\d+)?)");
-    private static final Pattern MARKS = Pattern.compile("(?i)\\b(?:SEE\\s+)?marks?\\s*[:= -]?\\s*(\\d+(?:\\.\\d+)?)");
+    private static final Pattern CREDITS = Pattern.compile("(?i)(?:\\bcredits?\\s*[:= -]?\\s*(\\d+(?:\\.\\d+)?)|\\b(\\d+(?:\\.\\d+)?)\\s*credits?\\b)");
+    private static final Pattern MARKS = Pattern.compile("(?i)(?:\\b(?:SEE|CIE\\s+)?marks?\\s*[:= -]?\\s*(\\d+(?:\\.\\d+)?)|\\b(?:CIE|SEE)\\s*[:= -]?\\s*(\\d+(?:\\.\\d+)?))");
     private static final Pattern OPEN_ELECTIVE = Pattern.compile("(?i)(?:\\bOPEN\\s+ELECTIVE(?:\\s*[-–—]?\\s*[IVX0-9]+)?\\b|\\bOE\\s*[-–—]?\\s*[IVX0-9]+\\b)");
     private static final Pattern PROFESSIONAL_ELECTIVE = Pattern.compile("(?i)(?:\\bPROFESSIONAL\\s+ELECTIVE(?:\\s*[-–—]?\\s*[IVX0-9]+)?\\b|\\bPE\\s*[-–—]?\\s*[IVX0-9]+\\b)");
+    private static final Pattern NUMBERED_HEADING = Pattern.compile("^\\s*\\d+\\.\\s+([A-Z][A-Za-z0-9 ,&'–—()-]+)$");
+
+    private static String extractCredits(Matcher m) {
+        if (m.group(1) != null && !m.group(1).isBlank()) return m.group(1);
+        if (m.groupCount() >= 2 && m.group(2) != null && !m.group(2).isBlank()) return m.group(2);
+        return "";
+    }
 
 
     public SyllabusDocument parse(Path pdf) throws IOException {
@@ -47,6 +54,18 @@ public class SyllabusParser {
         for(int i=0;i<lines.length;i++)if(isSyllabusSectionHeading(lines[i]))starts.add(i);
         if(!starts.isEmpty()) parseSections(result,lines,starts);
         else parseExplicitLabels(result,lines);
+
+        for (SyllabusSubject s : result.getSubjects()) {
+            Subject matched = s.getMatchedSemesterSubject();
+            if (matched != null && matched != Subject.OE) {
+                if (s.getCourseCode().isBlank()) {
+                    s.setCourseCode(matched.getCourseCode());
+                }
+                if (s.getCredits().isBlank()) {
+                    s.setCredits(String.valueOf(matched.getCredits()));
+                }
+            }
+        }
         return result;
     }
 
@@ -68,7 +87,7 @@ public class SyllabusParser {
                 String raw=lines[i]; String upper=raw.toUpperCase(Locale.ROOT);
                 Matcher code=CODE.matcher(raw);
                 if(subject.getCourseCode().isBlank()&&upper.contains("COURSE CODE")&&code.find())subject.setCourseCode(code.group());
-                Matcher credits=CREDITS.matcher(raw);if(credits.find())subject.setCredits(credits.group(1));
+                Matcher credits=CREDITS.matcher(raw);if(credits.find())subject.setCredits(extractCredits(credits));
                 Matcher marks=MARKS.matcher(raw);if(marks.find()&&subject.getTotalMarks().isBlank())subject.setTotalMarks(marks.group(1));
                 if(upper.startsWith("COURSE TYPE")||upper.startsWith("TYPE OF COURSE")||upper.startsWith("CATEGORY")) {
                     if(OPEN_ELECTIVE.matcher(raw).find()) subject.setCategory(SyllabusCategory.OPEN_ELECTIVE);
@@ -93,15 +112,23 @@ public class SyllabusParser {
                 Matcher unitMatch=UNIT.matcher(raw);
                 if(unitMatch.matches()) {
                     int number=unitNumber(unitMatch.group(1));
-                    String title=unitMatch.group(2)==null||unitMatch.group(2).isBlank()?raw.trim():unitMatch.group(2).trim();
-                    unit=new SyllabusUnit(number,title);subject.getUnits().add(unit);lastTopic=null;continue;
+                    String title=unitMatch.group(2)==null||unitMatch.group(2).isBlank()?"":unitMatch.group(2).replaceAll("^[-–—:：.?\\s]+", "").trim();
+                    unit=subject.getOrCreateUnit(number,title);lastTopic=null;continue;
                 }
                 if(unit!=null) {
                     String line=raw.trim();
                     if(isSectionFooter(line)){unit=null;lastTopic=null;continue;}
                     if(line.isEmpty()||isNoiseOrPageHeader(line))continue;
                     if(Character.isWhitespace(raw.charAt(0))&&lastTopic!=null)lastTopic.getSubtopics().add(new SyllabusTopic(line));
-                    else {lastTopic=new SyllabusTopic(line);unit.getTopics().add(lastTopic);}
+                    else {
+                        boolean topicExists = unit.getTopics().stream().anyMatch(t -> t.getText().trim().equalsIgnoreCase(line));
+                        if (!topicExists) {
+                            lastTopic=new SyllabusTopic(line);
+                            unit.getTopics().add(lastTopic);
+                        } else {
+                            lastTopic = unit.getTopics().stream().filter(t -> t.getText().trim().equalsIgnoreCase(line)).findFirst().orElse(null);
+                        }
+                    }
                 }
             }
             result.getSubjects().add(subject);
@@ -186,20 +213,43 @@ public class SyllabusParser {
             if(raw.isBlank())continue;
             String dept=departmentFromLine(raw);if(dept!=null){department=dept;continue;}
             Matcher label=Pattern.compile("(?i)^\\s*(?:subject|course|paper)\\s*(?:name|title)?\\s*[:：-]\\s*(.+)$").matcher(raw);
-            if(label.matches()) {
-                subject=new SyllabusSubject(label.group(1).trim());subject.setDepartmentCode(department);
-                subject.classifyFromHeading();result.getSubjects().add(subject);unit=null;lastTopic=null;continue;
+            Matcher numHeading=NUMBERED_HEADING.matcher(raw.trim());
+            boolean isExplicitLabel = label.matches() && !raw.toLowerCase(Locale.ROOT).contains("-wise");
+            boolean isNumberedHeading = numHeading.matches() && !raw.toLowerCase(Locale.ROOT).contains("syllabus") && !raw.toLowerCase(Locale.ROOT).contains("overview");
+            if(isExplicitLabel || isNumberedHeading) {
+                String subName = isExplicitLabel ? label.group(1).trim() : numHeading.group(1).trim();
+                subject=new SyllabusSubject(subName);
+                subject.setDepartmentCode(department);
+                subject.classifyFromHeading();
+                result.getSubjects().add(subject);
+                unit=null;
+                lastTopic=null;
+                continue;
             }
             if(subject!=null&&unit==null)updateMetadata(subject,raw);
             Matcher unitMatch=UNIT.matcher(raw);
             if(unitMatch.matches()&&subject!=null) {
-                int number=unitNumber(unitMatch.group(1));String title=unitMatch.group(2)==null||unitMatch.group(2).isBlank()?raw.trim():unitMatch.group(2).trim();
-                unit=new SyllabusUnit(number,title);subject.getUnits().add(unit);lastTopic=null;continue;
+                int number=unitNumber(unitMatch.group(1));
+                String title=unitMatch.group(2)==null||unitMatch.group(2).isBlank()?"":unitMatch.group(2).replaceAll("^[-–—:：.?\\s]+", "").trim();
+                unit=subject.getOrCreateUnit(number,title);
+                lastTopic=null;
+                continue;
             }
             if(unit!=null) {
-                String line=raw.trim();if(isSectionFooter(line)){unit=null;lastTopic=null;continue;}if(line.isEmpty())continue;
-                if(Character.isWhitespace(raw.charAt(0))&&lastTopic!=null)lastTopic.getSubtopics().add(new SyllabusTopic(line));
-                else {lastTopic=new SyllabusTopic(line);unit.getTopics().add(lastTopic);}
+                String line=raw.trim();
+                if(isSectionFooter(line)){unit=null;lastTopic=null;continue;}
+                if(line.isEmpty()||isNoiseOrPageHeader(line))continue;
+                if(Character.isWhitespace(raw.charAt(0))&&lastTopic!=null) {
+                    lastTopic.getSubtopics().add(new SyllabusTopic(line));
+                } else {
+                    boolean topicExists = unit.getTopics().stream().anyMatch(t -> t.getText().trim().equalsIgnoreCase(line));
+                    if (!topicExists) {
+                        lastTopic=new SyllabusTopic(line);
+                        unit.getTopics().add(lastTopic);
+                    } else {
+                        lastTopic = unit.getTopics().stream().filter(t -> t.getText().trim().equalsIgnoreCase(line)).findFirst().orElse(null);
+                    }
+                }
             }
         }
     }
@@ -210,8 +260,11 @@ public class SyllabusParser {
             String found = semester.group(1)!=null?semester.group(1):semester.group(2);
             subject.setSemester(SyllabusSelector.normalizeSemester(found));
         }
-        Matcher code=CODE.matcher(line);if(subject.getCourseCode().isBlank()&&line.toUpperCase(Locale.ROOT).contains("COURSE CODE")&&code.find())subject.setCourseCode(code.group());
-        Matcher credits=CREDITS.matcher(line);if(credits.find())subject.setCredits(credits.group(1));
+        Matcher code=CODE.matcher(line);
+        if(subject.getCourseCode().isBlank() && (line.toUpperCase(Locale.ROOT).contains("COURSE CODE") || line.contains("|") || line.toUpperCase(Locale.ROOT).contains("CODE")) && code.find()) {
+            subject.setCourseCode(code.group());
+        }
+        Matcher credits=CREDITS.matcher(line);if(credits.find())subject.setCredits(extractCredits(credits));
         Matcher marks=MARKS.matcher(line);if(marks.find()&&subject.getTotalMarks().isBlank())subject.setTotalMarks(marks.group(1));
         if(OPEN_ELECTIVE.matcher(line).find())subject.setOpenElective(true);
         else if(PROFESSIONAL_ELECTIVE.matcher(line).find())subject.setCategory(SyllabusCategory.PROFESSIONAL_ELECTIVE);

@@ -10,12 +10,16 @@ import {
   ChevronRight,
   GraduationCap,
   Sparkles,
+  TrendingUp,
+  PieChart,
 } from 'lucide-react';
 
 export default function Sidebar({ collapsed, setCollapsed }) {
   const navItems = [
     { name: 'Dashboard', path: '/', icon: LayoutDashboard },
+    { name: 'Performance Prediction', path: '/prediction', icon: TrendingUp },
     { name: 'Students', path: '/students', icon: Users },
+    { name: 'Subject Performance', path: '/subject-performance', icon: PieChart },
     { name: 'Subject Analytics', path: '/analytics', icon: BarChart3 },
     { name: 'Excel Upload', path: '/excel-upload', icon: Upload },
     { name: 'Syllabus Management', path: '/syllabus', icon: BookOpen },

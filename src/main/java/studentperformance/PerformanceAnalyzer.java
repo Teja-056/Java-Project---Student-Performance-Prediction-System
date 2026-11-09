@@ -52,7 +52,11 @@ public class PerformanceAnalyzer {
         return possible == 0 ? 0 : (totalMarks(student, 1) + totalMarks(student, 2)) * 100.0 / possible;
     }
 
-    private double possibleMarks(Student student, int internalNumber) {
+    public boolean hasAnyAssessment(Student student, int internalNumber) {
+        return possibleMarks(student, internalNumber) > 0;
+    }
+
+    public double possibleMarks(Student student, int internalNumber) {
         double possible = 0;
         for (var entry : student.getMarks(internalNumber).entrySet()) {
             SubjectAssessment assessment = entry.getValue();

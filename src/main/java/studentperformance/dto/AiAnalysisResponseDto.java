@@ -19,17 +19,26 @@ public class AiAnalysisResponseDto {
     private String estimatedFuturePerformance;
     private List<String> riskFactors;
     private List<String> recommendedInterventions;
-    private int suggestedDailyStudyHours;
     private Map<String, String> subjectWiseImprovementPlan;
     private List<String> revisionStrategies;
     private List<String> focusTopics;
+    private List<String> groundedSubjects;
+    private List<String> missingSyllabusSubjects;
 
     public AiAnalysisResponseDto() {}
 
     public AiAnalysisResponseDto(AiAnalysisResult result, String provider, String model, String syllabusGroundingStatus) {
+        this(result, provider, model, syllabusGroundingStatus, List.of(), List.of());
+    }
+
+    public AiAnalysisResponseDto(AiAnalysisResult result, String provider, String model,
+                                 String syllabusGroundingStatus, List<String> groundedSubjects,
+                                 List<String> missingSyllabusSubjects) {
         this.provider = provider;
         this.model = model;
         this.syllabusGroundingStatus = syllabusGroundingStatus;
+        this.groundedSubjects = groundedSubjects != null ? groundedSubjects : List.of();
+        this.missingSyllabusSubjects = missingSyllabusSubjects != null ? missingSyllabusSubjects : List.of();
         if (result != null) {
             this.generatedAt = result.getGeneratedAt();
             this.academicSummary = result.getAcademicSummary();
@@ -41,7 +50,6 @@ public class AiAnalysisResponseDto {
             this.estimatedFuturePerformance = result.getEstimatedFuturePerformance();
             this.riskFactors = result.getRiskFactors();
             this.recommendedInterventions = result.getRecommendedInterventions();
-            this.suggestedDailyStudyHours = result.getSuggestedDailyStudyHours();
             this.subjectWiseImprovementPlan = result.getSubjectWiseImprovementPlan();
             this.revisionStrategies = result.getRevisionStrategies();
             this.focusTopics = result.getFocusTopics();
@@ -61,8 +69,9 @@ public class AiAnalysisResponseDto {
     public String getEstimatedFuturePerformance() { return estimatedFuturePerformance; }
     public List<String> getRiskFactors() { return riskFactors; }
     public List<String> getRecommendedInterventions() { return recommendedInterventions; }
-    public int getSuggestedDailyStudyHours() { return suggestedDailyStudyHours; }
     public Map<String, String> getSubjectWiseImprovementPlan() { return subjectWiseImprovementPlan; }
     public List<String> getRevisionStrategies() { return revisionStrategies; }
     public List<String> getFocusTopics() { return focusTopics; }
+    public List<String> getGroundedSubjects() { return groundedSubjects; }
+    public List<String> getMissingSyllabusSubjects() { return missingSyllabusSubjects; }
 }
